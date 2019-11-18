@@ -1,0 +1,7 @@
+Flask==1.1.1
+requests==2.22.0
+dialogflow==0.7.2
+python-dotenv==0.10.3
+pusher==2.1.4
+
+# export FLASK_ENV=development
