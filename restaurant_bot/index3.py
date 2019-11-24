@@ -22,6 +22,8 @@ pusher_client = pusher.Pusher(
 INTENT_FOOD_CATEGORY = "food.category"
 INTENT_MOVIE = "movie"
 
+DEBUG_LOG_ENABLE = True
+
 
 @app.route('/')
 def index():
@@ -36,84 +38,24 @@ def restaurant_bot_api():
     print("============= end ========")
     try:
 
-        length = len(user_info_dic)
-        print(f"{length}")
-        length = length + 1
-        millis = int(round(time.time() * 1000))
-        user = UserModel(length, millis)
-        user_info_dic[length] = user
-
-        fulfillmentText = 'Basic card Response from webhook'
-        aog = actions_on_google_response()
-        aog_sr = aog.simple_response([
-            [fulfillmentText, fulfillmentText, False]
-        ])
-
-        basic_card = aog.basic_card("Title", "Subtitle", "This is formatted text",
-                                    image=["https://www.pragnakalp.com/wp-content/uploads/2018/12/logo-1024.png",
-                                           "this is accessibility text"])
-
-        ff_response = fulfillment_response()
-
-        ff_text = ff_response.fulfillment_text(fulfillmentText)
-
-        fb = facebook_response()
-        texts = ['text1']
-        text_res = fb.text_response(texts)
-
-        ff_messages = ff_response.fulfillment_messages([text_res])
-        print("===ready to replay==")
-        reply = ff_response.main_response(ff_text, ff_messages)
-        return jsonify(reply)
-
-        # fb = facebook_response()
-        # # texts = ['text1', 'text2', 'text3']
-        # text_res = fb.text_response("fulfillmentText")
-        #
-        # ff_response = fulfillment_response()
-        # ff_text = ff_response.fulfillment_text(fb)
-        # # ff_messages = ff_response.fulfillment_messages([texts])
-        #
-        # reply = ff_response.main_response(ff_text)
-        # return jsonify(reply)
-
-        # platform = get_request_platform_source(data)
+        # length = len(user_info_dic)
+        # print(f"{length}")
+        # length = length + 1
+        # millis = int(round(time.time() * 1000))
+        # user = UserModel(length, millis)
+        # user_info_dic[length] = user
+        platform = get_request_platform_source(data)
+        response = process_for_facebook(data)
+        return jsonify(response)
         # if platform == "facebook":
-        #     # fb = facebook_response()
-        #     # texts = ['text1', 'text2', 'text3']
-        #     # text_res = fb.text_response(texts)
-        #     #
-        #     # # response = process_for_facebook(data)
-        #     # reply = {"fulfillmentText": text_res}
-        #     # return jsonify(reply)
-        #
-        #     fulfillmentText = 'Basic card Response from webhook'
-        #
-        #     aog = actions_on_google_response()
-        #     aog_sr = aog.simple_response([
-        #         [fulfillmentText, fulfillmentText, False]
-        #     ])
-        #
-        #     basic_card = aog.basic_card("Title", "Subtitle", "This is formatted text",
-        #                                 image=["https://www.pragnakalp.com/wp-content/uploads/2018/12/logo-1024.png",
-        #                                        "this is accessibility text"])
-        #
-        #     ff_response = fulfillment_response()
-        #     ff_text = ff_response.fulfillment_text(fulfillmentText)
-        #     ff_messages = ff_response.fulfillment_messages([aog_sr, basic_card])
-        #
-        #     reply = ff_response.main_response(ff_text, ff_messages)
-        #     return jsonify(reply, safe=False)
-        #
+        #     response = process_for_facebook(data)
+        #     return jsonify(response)
         # else:
-        #     # response = "from console"
-        #     fb = facebook_response()
-        #     texts = ['text1', 'text2', 'text3']
-        #     text_res = fb.text_response(texts)
-        #     reply = {"fulfillmentText": text_res}
+        #     response = "from console"
+        #     reply = {"fulfillmentText": response}
         #     return jsonify(reply)
-    except:
-        response = "error block"
+    except Exception as e:
+        response = f"error block {e}"
         reply = {"fulfillmentText": response}
         return jsonify(reply)
 
@@ -158,13 +100,94 @@ def send_message():
 
 
 def process_for_facebook(data):
-    intent_name = data['queryResult']['intent']['displayName']
-    response = "nothing"
-    if intent_name == INTENT_MOVIE:
-        response = "movie"
-    elif intent_name == INTENT_FOOD_CATEGORY:
-        response = "food category"
-    return response
+    # fulfillmentText = 'Basic card Response from webhook'
+    # aog = actions_on_google_response()
+    # aog_sr = aog.simple_response([
+    #     [fulfillmentText, fulfillmentText, False]
+    # ])
+    #
+    # basic_card = aog.basic_card("Title", "Subtitle", "This is formatted text",
+    #                             image=["https://www.pragnakalp.com/wp-content/uploads/2018/12/logo-1024.png",
+    #                                    "this is accessibility text"])
+    #
+    # ff_response = fulfillment_response()
+    # ff_text = ff_response.fulfillment_text(fulfillmentText)
+    #
+    # fb = facebook_response()
+    # texts = ['text1']
+    # text_res = fb.text_response(texts)
+    #
+    # ff_messages = ff_response.fulfillment_messages([text_res])
+    # print("===ready to replay==")
+    # reply = ff_response.main_response(ff_text, ff_messages)
+    # return reply
+    # ---------------------------
+    # intent_name = data['queryResult']['intent']['displayName']
+    # response = "nothing"
+    # if intent_name == INTENT_MOVIE:
+    #     response = "movie"
+    # elif intent_name == INTENT_FOOD_CATEGORY:
+    #     response = "food category"
+    # return response
+    # -------------------
+    # get action from json
+    action = data['queryResult']['action']
+    if action == "food.category":
+        food_type = data['queryResult']['parameters']['food_type']
+        sender_id = get_facebook_sender_id(data)
+        last_update = int(round(time.time() * 1000))
+        if sender_id in user_info_dic:
+            user = user_info_dic[sender_id]
+            user.last_update = last_update
+            user.current_food_category = food_type
+        else:
+            user = UserModel()
+            user.user_id = sender_id
+            user.last_update = last_update
+            user.current_food_category = food_type
+            user_info_dic[sender_id] = user
+
+        if DEBUG_LOG_ENABLE:
+            for x in user_info_dic.values():
+                print(x.current_food_category)
+
+        if str(food_type).lower() == "Bangladeshi".lower():
+            fulfillment_text = 'bangladeshi food category'
+            ff_response = FulfillmentResponse()
+            fulfillment_message = ff_response.fulfillment_text(fulfillment_text)
+
+            fb_platform = FacebookResponse()
+            # # text response
+            # title = ['Please choose a Category:']
+            # text_res = fb_platform.text_response(title)
+            # # card response
+            # card_response = fb_platform.card_advance_response()
+            #
+            # # facebook_messages = ff_response.fulfillment_messages([card_response])
+
+            title = ['Please choose a Category:']
+            text_res = fb_platform.text_response(title)
+
+            buttons = [
+                ['button1', 'hello'],
+                ['button2', 'hello again']
+            ]
+
+            card1 = fb_platform.make_card_response("title1", "subtitle1",
+                                                   "http://jalilurrahman.com/ChatBotImageResource/cover.jpeg", buttons)
+            card2 = fb_platform.make_card_response("title2", "subtitle2",
+                                                   "http://jalilurrahman.com/ChatBotImageResource/cover.jpeg", buttons)
+            card3 = fb_platform.make_card_response("title3", "subtitle3",
+                                                   "http://jalilurrahman.com/ChatBotImageResource/cover.jpeg", buttons)
+            card_response = fb_platform.card_full_fillment(title, [card1, card2, card3])
+
+            reply = ff_response.main_response(fulfillment_message, card_response)
+            print(reply)
+            return reply
+        elif food_type == "Mexicun":
+            print("not found")
+            pass
+    return food_type
 
 
 # Helper method
@@ -175,7 +198,11 @@ def get_request_platform_source(data):
         return "console"
 
 
-class actions_on_google_response():
+def get_facebook_sender_id(data):
+    return data['originalDetectIntentRequest']['payload']['data']['sender']['id']
+
+
+class ActionsOnGoogleResponse:
 
     # class variable initializer initializer
     def __init__(self):
@@ -382,7 +409,7 @@ class actions_on_google_response():
 
 
 # Responses for Facebook
-class facebook_response():
+class FacebookResponse:
 
     # class variable initializer initializer
     def __init__(self):
@@ -463,6 +490,70 @@ class facebook_response():
             "platform": self.platform
         }
 
+    def make_card_response(self, title, subtitle, image_uri, buttons):
+        buttons_json = []
+        for button in buttons:
+            buttons_json.append(
+                {
+                    "text": str(button[0]),
+                    "postback": str(button[1])
+                }
+            )
+        response_dict = {
+            "card": {
+                "title": str(title),
+                "subtitle": str(subtitle),
+                "imageUri": image_uri,
+                "buttons": buttons_json
+            },
+            "platform": self.platform
+        }
+        return response_dict
+
+    def card_full_fillment(self, cards):
+        card_respons = []
+        for card in cards:
+            card_respons.append(card)
+
+        response = {'fulfillment_messages': card_respons}
+        return response
+
+    def card_advance_response(self):
+        responses_json = []
+        response_dict = {
+            "card": {
+                "title": str("Welcome to Roncom Restaurant."),
+                "subtitle": str("Flavorful broths can enhance a wide range of trendy dishes while saving on labor."),
+                "imageUri": "http://jalilurrahman.com/ChatBotImageResource/cover.jpeg",
+                "buttons": [
+                    {
+                        "text": "Food Menu",
+                        "postback": "show food menu"
+                    }
+                ]
+            },
+            "platform": self.platform
+        }
+
+        response_dict2 = {
+            "card": {
+                "title": str("Welcome to Roncom Restaurant."),
+                "subtitle": str("Flavorful broths can enhance a wide range of trendy dishes while saving on labor."),
+                "imageUri": "http://jalilurrahman.com/ChatBotImageResource/cover.jpeg",
+                "buttons": [
+                    {
+                        "text": "Food Menu",
+                        "postback": "show food menu"
+                    }
+                ]
+            },
+            "platform": self.platform
+        }
+        responses_json.append(response_dict)
+        responses_json.append(response_dict2)
+        response = {'fulfillment_messages': responses_json}
+        return response
+
     def custom_payload(self, payload):
 
         # return custom payload
@@ -473,7 +564,7 @@ class facebook_response():
 
 
 # Responses for Telegram
-class telegram_response():
+class TelegramResponse:
 
     # class variable initializer initializer
     def __init__(self):
@@ -555,7 +646,7 @@ class telegram_response():
 
 
 # dialogflow fulfillment response
-class fulfillment_response():
+class FulfillmentResponse:
 
     def __init__(self):
         pass
@@ -672,9 +763,10 @@ class fulfillment_response():
 
 
 class UserModel:
-    def __init__(self, user_id, last_update):
-        self.user_id = user_id
-        self.last_update = last_update
+    def __init__(self):
+        self.user_id = ""
+        self.last_update = ""
+        self.current_food_category = ""
 
 
 # run Flask app

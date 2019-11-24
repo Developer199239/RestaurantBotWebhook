@@ -9,6 +9,7 @@ import time
 app = Flask(__name__)
 
 user_info_dic = {}
+tacos_food_order = {}
 
 # initialize Pusher
 pusher_client = pusher.Pusher(
@@ -21,6 +22,8 @@ pusher_client = pusher.Pusher(
 # Intent constants
 INTENT_FOOD_CATEGORY = "food.category"
 INTENT_MOVIE = "movie"
+
+DEBUG_LOG_ENABLE = True
 
 
 @app.route('/')
@@ -98,36 +101,6 @@ def send_message():
 
 
 def process_for_facebook(data):
-    # fulfillmentText = 'Basic card Response from webhook'
-    # aog = actions_on_google_response()
-    # aog_sr = aog.simple_response([
-    #     [fulfillmentText, fulfillmentText, False]
-    # ])
-    #
-    # basic_card = aog.basic_card("Title", "Subtitle", "This is formatted text",
-    #                             image=["https://www.pragnakalp.com/wp-content/uploads/2018/12/logo-1024.png",
-    #                                    "this is accessibility text"])
-    #
-    # ff_response = fulfillment_response()
-    # ff_text = ff_response.fulfillment_text(fulfillmentText)
-    #
-    # fb = facebook_response()
-    # texts = ['text1']
-    # text_res = fb.text_response(texts)
-    #
-    # ff_messages = ff_response.fulfillment_messages([text_res])
-    # print("===ready to replay==")
-    # reply = ff_response.main_response(ff_text, ff_messages)
-    # return reply
-    # ---------------------------
-    # intent_name = data['queryResult']['intent']['displayName']
-    # response = "nothing"
-    # if intent_name == INTENT_MOVIE:
-    #     response = "movie"
-    # elif intent_name == INTENT_FOOD_CATEGORY:
-    #     response = "food category"
-    # return response
-    # -------------------
     # get action from json
     action = data['queryResult']['action']
     if action == "food.category":
@@ -144,12 +117,303 @@ def process_for_facebook(data):
             user.last_update = last_update
             user.current_food_category = food_type
             user_info_dic[sender_id] = user
-        for x in user_info_dic.values():
-            print(x.current_food_category)
-        return food_type
+
+        if DEBUG_LOG_ENABLE:
+            for x in user_info_dic.values():
+                print(x.current_food_category)
+
+        if str(food_type).lower() == "Bangladeshi".lower():
+            fulfillment_text = 'bangladeshi food category'
+            ff_response = FulfillmentResponse()
+            fulfillment_message = ff_response.fulfillment_text(fulfillment_text)
+
+            fb_platform = FacebookResponse()
+            title = ['Please choose a Category:']
+            text_res = fb_platform.text_response(title)
+
+            tacos_buttons = [
+                ['Show More', 'show tacos item']
+            ]
+            card1 = fb_platform.make_card_response("Tacos", "Tacos is popular food item",
+                                                   "http://jalilurrahman.com/ChatBotImageResource/tacos1.jpeg",
+                                                   tacos_buttons)
+
+            pizza_buttons = [
+                ['Show More', 'show Pizza Item']
+            ]
+            card2 = fb_platform.make_card_response("Pizza", "Pizza is most popular food item",
+                                                   "http://jalilurrahman.com/ChatBotImageResource/tacos1.jpeg",
+                                                   pizza_buttons)
+            burger_buttons = [
+                ['Show More', 'show Burger Item']
+            ]
+            card3 = fb_platform.make_card_response("Burger", "Burger is popular food item",
+                                                   "http://jalilurrahman.com/ChatBotImageResource/burger1.jpeg",
+                                                   burger_buttons)
+            card_response = fb_platform.card_full_fillment([text_res, card1, card2, card3])
+
+            reply = ff_response.main_response(fulfillment_message, card_response)
+            if DEBUG_LOG_ENABLE:
+                print(reply)
+            return reply
+        elif str(food_type).lower() == "Mexicun".lower():
+            fulfillment_text = 'Mexicun food category'
+            ff_response = FulfillmentResponse()
+            fulfillment_message = ff_response.fulfillment_text(fulfillment_text)
+
+            fb_platform = FacebookResponse()
+            title = ['Please choose a Category:']
+            text_res = fb_platform.text_response(title)
+
+            tacos_buttons = [
+                ['Show More', 'show tacos item']
+            ]
+            card1 = fb_platform.make_card_response("Tacos", "Tacos is popular food item",
+                                                   "http://jalilurrahman.com/ChatBotImageResource/tacos1.jpeg",
+                                                   tacos_buttons)
+
+            pizza_buttons = [
+                ['Show More', 'show Pizza Item']
+            ]
+            card2 = fb_platform.make_card_response("Pizza", "Pizza is most popular food item",
+                                                   "http://jalilurrahman.com/ChatBotImageResource/mexican_food.jpeg",
+                                                   pizza_buttons)
+            burger_buttons = [
+                ['Show More', 'show Burger Item']
+            ]
+            card3 = fb_platform.make_card_response("Burger", "Burger is popular food item",
+                                                   "http://jalilurrahman.com/ChatBotImageResource/burger1.jpeg",
+                                                   burger_buttons)
+            card_response = fb_platform.card_full_fillment([text_res, card1, card2, card3])
+
+            reply = ff_response.main_response(fulfillment_message, card_response)
+            if DEBUG_LOG_ENABLE:
+                print(reply)
+            return reply
+    elif action == "food.category.order":
+        sender_id = get_facebook_sender_id(data)
+        update_user_last_trigger_time(sender_id)
+        food_category = get_food_category(sender_id)
+        food_category_order = data['queryResult']['parameters']['food_category']
+
+        if str(food_category_order).lower() == "tacos":
+            return process_food_order_tacos(food_category)
+        elif str(food_category_order).lower() == "pizza":
+            pass
+        elif str(food_category_order).lower() == "burger":
+            pass
+    elif action == "food.category.order.items":
+        sender_id = get_facebook_sender_id(data)
+        update_user_last_trigger_time(sender_id)
+
+        food_category = ""  # tacos, burger, pizza
+        output_contexs = data['queryResult']['outputContexts']
+        for row in output_contexs:
+            if "parameters" in row:
+                parameters = row['parameters']
+                if "food_category" in parameters:
+                    food_category = str(parameters['food_category'])
+                    break
+        order_food_items = data['queryResult']['parameters']['order_food_items']  # bangladeshi tacos 1, mexicun....
+
+        food_category_type = get_food_category(sender_id)  # bnagladeshi or mexicun
+
+        if food_category == "tacos":
+            return process_food_order_tacos_booking(sender_id, order_food_items, food_category_type)
+        elif food_category == "pizza":
+            pass
+        elif food_category == "burger":
+            pass
+    elif action == "order.quantity":
+        print("#########")
+        print(data)
+
+        sender_id = get_facebook_sender_id(data)
+        update_user_last_trigger_time(sender_id)
+
+        food_category = ""  # tacos, burger, pizza
+        order_food_items = ""  # bangladeshi tacos 1,....
+        output_contexs = data['queryResult']['outputContexts']
+        for row in output_contexs:
+            if "parameters" in row:
+                parameters = row['parameters']
+                if "food_category" in parameters:
+                    food_category = str(parameters['food_category'])
+                    order_food_items = str(parameters['order_food_items'])
+                    break
+        order_quantity_number = data['queryResult']['parameters'][
+            'order_quantity_number']  # 1, 2, 3... order quantity number
+
+        if food_category == "tacos":
+            return process_food_order_tacos_quantity(sender_id, food_category, order_food_items, order_quantity_number)
+        elif food_category == "pizza":
+            pass
+        elif food_category == "burger":
+            pass
+    else:
+        return "nothing"
+
+
+# Food category order
+def process_food_order_tacos_quantity(sender_id, food_category, order_food_items, order_quantity_number):
+    # here sender_id = user facebook id
+    # food_category = ""  # tacos, burger, pizza
+    # order_food_items = ""  # bangladeshi tacos 1,....
+    # order_quantity_number = 1,2,3,4...
+    user_tacos_order = []
+    if sender_id in tacos_food_order:
+        user_tacos_order = tacos_food_order[sender_id]
+
+    for row in user_tacos_order:
+        if not bool(row['status']):
+            row['status'] = True
+            row['quantity'] = int(order_quantity_number)
+            break
+
+    tacos_food_order[sender_id] = user_tacos_order
+    fulfillment_text = 'process food order tacos quantity'
+    ff_response = FulfillmentResponse()
+    fulfillment_message = ff_response.fulfillment_text(fulfillment_text)
+
+    fb_platform = FacebookResponse()
+    text_title = "Quantity of" + str(food_category).title() + " " + str(
+        order_food_items).title() + " has been update to " + str(order_quantity_number) + "."
+    text_res = fb_platform.text_response([text_title])
+
+    quick_replay_title = "Would you like to continue shopping?"
+    replies = ['Yes, Continue', 'Place Order', 'Show Cart']
+    fb_quick_replies = fb_platform.quick_replies(quick_replay_title, replies)
+
+    ff_response = FulfillmentResponse()
+
+    quick_replies_response = ff_response.fulfillment_messages([text_res, fb_quick_replies])
+    reply = ff_response.main_response(fulfillment_message, quick_replies_response)
+
+    if DEBUG_LOG_ENABLE:
+        print("==== order process ===")
+        if sender_id in tacos_food_order:
+            user_tacos_order = tacos_food_order[sender_id]
+
+        for row in user_tacos_order:
+            print(row['item_name'])
+            print(row['price'])
+            print(row['quantity'])
+            print(row['status'])
+
+    if DEBUG_LOG_ENABLE:
+        print(reply)
+    return reply
+
+
+def process_food_order_tacos_booking(sender_id, order_food_items, food_category_type):
+    # update tacos order
+    user_tacos_order = []
+    if sender_id in tacos_food_order:
+        user_tacos_order = tacos_food_order[sender_id]
+
+    # todo filter status = false item remove from array
+    if order_food_items == "bangladeshi tacos 1":
+        new_tacos_order = {
+            "item_name": str(order_food_items),
+            "price": 5,
+            "quantity": 0,
+            "status": False
+        }
+        user_tacos_order.append(new_tacos_order)
+        tacos_food_order[sender_id] = user_tacos_order
+    elif order_food_items == "bangladeshi tacos 2":
+        new_tacos_order = {
+            "item_name": str(order_food_items),
+            "price": 7,
+            "quantity": 0,
+            "status": False
+        }
+        user_tacos_order.append(new_tacos_order)
+        tacos_food_order[sender_id] = user_tacos_order
+    elif order_food_items == "bangladeshi tacos 3":
+        new_tacos_order = {
+            "item_name": str(order_food_items),
+            "price": 10,
+            "quantity": 0,
+            "status": False
+        }
+        user_tacos_order.append(new_tacos_order)
+        tacos_food_order[sender_id] = user_tacos_order
+
+    fulfillment_text = 'Mexicun food category'
+    ff_response = FulfillmentResponse()
+    fulfillment_message = ff_response.fulfillment_text(fulfillment_text)
+
+    fb_platform = FacebookResponse()
+    title = "How many items of " + str(food_category_type).title() + " Tacos do you need?"
+    replies = ['1', '2', '3', '4', '5', '6', '7']
+    fb_quick_replies = fb_platform.quick_replies(title, replies)
+
+    ff_response = FulfillmentResponse()
+
+    quick_replies_response = ff_response.fulfillment_messages([fb_quick_replies])
+    reply = ff_response.main_response(fulfillment_message, quick_replies_response)
+    if DEBUG_LOG_ENABLE:
+        print(reply)
+    return reply
+
+
+def process_food_order_tacos(food_category):
+    fulfillment_text = 'tacos food category'
+    ff_response = FulfillmentResponse()
+    fulfillment_message = ff_response.fulfillment_text(fulfillment_text)
+
+    fb_platform = FacebookResponse()
+    call_back_text = "select " + str(food_category).lower() + " tacos 1"
+    tacos_buttons = [
+        ['Add to cart', call_back_text]
+    ]
+    title = str(food_category).title() + " Tacos1"
+    tacos1 = fb_platform.make_card_response(title, "5$",
+                                            "http://jalilurrahman.com/ChatBotImageResource/tacos1.jpeg",
+                                            tacos_buttons)
+    call_back_text = "select " + str(food_category).lower() + " tacos 2"
+    tacos_buttons = [
+        ['Add to cart', call_back_text]
+    ]
+    title = str(food_category).title() + " Tacos2"
+    tacos2 = fb_platform.make_card_response(title, "7$",
+                                            "http://jalilurrahman.com/ChatBotImageResource/tacos2.jpeg",
+                                            tacos_buttons)
+
+    call_back_text = "select " + str(food_category).lower() + " tacos 3"
+    tacos_buttons = [
+        ['Add to cart', call_back_text]
+    ]
+    title = str(food_category).title() + " Tacos3"
+    tacos3 = fb_platform.make_card_response(title, "10$",
+                                            "http://jalilurrahman.com/ChatBotImageResource/tacos3.jpeg",
+                                            tacos_buttons)
+    tacos_response = fb_platform.card_full_fillment([tacos1, tacos2, tacos3])
+
+    reply = ff_response.main_response(fulfillment_message, tacos_response)
+    if DEBUG_LOG_ENABLE:
+        print(reply)
+    return reply
 
 
 # Helper method
+def update_user_last_trigger_time(facebook_sender_id):
+    last_update = int(round(time.time() * 1000))
+    if facebook_sender_id in user_info_dic:
+        user = user_info_dic[facebook_sender_id]
+        user.last_update = last_update
+
+
+def get_food_category(facebook_sender_id):
+    print(user_info_dic)
+    if facebook_sender_id in user_info_dic:
+        user = user_info_dic[facebook_sender_id]
+        return user.current_food_category
+    else:
+        return ""
+
+
 def get_request_platform_source(data):
     if "source" in data['originalDetectIntentRequest']:
         return data['originalDetectIntentRequest']['source']
@@ -448,6 +712,70 @@ class FacebookResponse:
             },
             "platform": self.platform
         }
+
+    def make_card_response(self, title, subtitle, image_uri, buttons):
+        buttons_json = []
+        for button in buttons:
+            buttons_json.append(
+                {
+                    "text": str(button[0]),
+                    "postback": str(button[1])
+                }
+            )
+        response_dict = {
+            "card": {
+                "title": str(title),
+                "subtitle": str(subtitle),
+                "imageUri": image_uri,
+                "buttons": buttons_json
+            },
+            "platform": self.platform
+        }
+        return response_dict
+
+    def card_full_fillment(self, cards):
+        card_respons = []
+        for card in cards:
+            card_respons.append(card)
+
+        response = {'fulfillment_messages': card_respons}
+        return response
+
+    def card_advance_response(self):
+        responses_json = []
+        response_dict = {
+            "card": {
+                "title": str("Welcome to Roncom Restaurant."),
+                "subtitle": str("Flavorful broths can enhance a wide range of trendy dishes while saving on labor."),
+                "imageUri": "http://jalilurrahman.com/ChatBotImageResource/cover.jpeg",
+                "buttons": [
+                    {
+                        "text": "Food Menu",
+                        "postback": "show food menu"
+                    }
+                ]
+            },
+            "platform": self.platform
+        }
+
+        response_dict2 = {
+            "card": {
+                "title": str("Welcome to Roncom Restaurant."),
+                "subtitle": str("Flavorful broths can enhance a wide range of trendy dishes while saving on labor."),
+                "imageUri": "http://jalilurrahman.com/ChatBotImageResource/cover.jpeg",
+                "buttons": [
+                    {
+                        "text": "Food Menu",
+                        "postback": "show food menu"
+                    }
+                ]
+            },
+            "platform": self.platform
+        }
+        responses_json.append(response_dict)
+        responses_json.append(response_dict2)
+        response = {'fulfillment_messages': responses_json}
+        return response
 
     def custom_payload(self, payload):
 
