@@ -10,6 +10,7 @@ app = Flask(__name__)
 
 user_info_dic = {}
 tacos_food_order = {}
+user_delivery_type = {}
 
 # initialize Pusher
 pusher_client = pusher.Pusher(
@@ -142,7 +143,7 @@ def process_for_facebook(data):
                 ['Show More', 'show Pizza Item']
             ]
             card2 = fb_platform.make_card_response("Pizza", "Pizza is most popular food item",
-                                                   "http://jalilurrahman.com/ChatBotImageResource/tacos1.jpeg",
+                                                   "http://jalilurrahman.com/ChatBotImageResource/mexican_pizza_2.jpeg",
                                                    pizza_buttons)
             burger_buttons = [
                 ['Show More', 'show Burger Item']
@@ -225,8 +226,9 @@ def process_for_facebook(data):
         elif food_category == "burger":
             pass
     elif action == "order.quantity":
-        print("#########")
-        print(data)
+        if DEBUG_LOG_ENABLE:
+            print("#########")
+            print(data)
 
         sender_id = get_facebook_sender_id(data)
         update_user_last_trigger_time(sender_id)
@@ -250,8 +252,264 @@ def process_for_facebook(data):
             pass
         elif food_category == "burger":
             pass
+    elif action == "show.cart":
+        sender_id = get_facebook_sender_id(data)
+        update_user_last_trigger_time(sender_id)
+        return show_my_cart(sender_id)
+    elif action == "cart.remove":
+        sender_id = get_facebook_sender_id(data)
+        update_user_last_trigger_time(sender_id)
+        remove_cart_item = data['queryResult']['parameters']['remove_cart_item']
+        food_category = data['queryResult']['parameters']['food_category']
+        return remove_my_cart(sender_id, remove_cart_item, food_category)
+    elif action == "place.order":
+        return place_order()
+    elif action == "place.order.on.table":
+        sender_id = get_facebook_sender_id(data)
+        update_user_last_trigger_time(sender_id)
+        return place_order_on_table(sender_id)
+    elif action == "place.order.on.table.number":
+        sender_id = get_facebook_sender_id(data)
+        update_user_last_trigger_time(sender_id)
+        msg = "You have chosen on table order. Please, click checkout to proceed to payment. You can edit also your " \
+              "cart content or delivery method from the option given below "
+        return confirm_order_message(sender_id, msg)
+    elif action == "order.confirm":
+        sender_id = get_facebook_sender_id(data)
+        update_user_last_trigger_time(sender_id)
+        return confirm_order(sender_id)
     else:
         return "nothing"
+
+
+# confirm order
+def confirm_order(sender_id):
+    fulfillment_text = 'confirm order'
+    ff_response = FulfillmentResponse()
+    fulfillment_message = ff_response.fulfillment_text(fulfillment_text)
+
+    fb_platform = FacebookResponse()
+    fb_quick_replies = fb_platform.text_response("need to open website")
+
+    ff_response = FulfillmentResponse()
+    quick_replies_response = {
+        "fulfillment_messages": [
+            {
+                "payload": {
+                    "facebook": {
+                        "attachment": {
+                            "type": "template",
+                            "payload": {
+                                "template_type": "button",
+                                "text": "Try the URL button!",
+                                "buttons": [
+                                    {
+                                        "type": "web_url",
+                                        "url": "https://www.messenger.com/",
+                                        "title": "URL Button",
+                                        "webview_height_ratio": "tall"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        ]
+    }
+
+    reply = ff_response.main_response(fulfillment_message, quick_replies_response)
+    if DEBUG_LOG_ENABLE:
+        print(reply)
+    return reply
+
+
+def confirm_order_message(sender_id, msg):
+    fulfillment_text = 'confirm order'
+    ff_response = FulfillmentResponse()
+    fulfillment_message = ff_response.fulfillment_text(fulfillment_text)
+
+    fb_platform = FacebookResponse()
+    replies = ['Confirm Order', 'Edit Cart', 'Edit Delivery']
+    fb_quick_replies = fb_platform.quick_replies(msg, replies)
+
+    ff_response = FulfillmentResponse()
+    quick_replies_response = ff_response.fulfillment_messages([fb_quick_replies])
+    reply = ff_response.main_response(fulfillment_message, quick_replies_response)
+    if DEBUG_LOG_ENABLE:
+        print(reply)
+    return reply
+
+
+# Place order on table
+def place_order_on_table(sender_id):
+    fulfillment_text = 'Place order on table'
+    ff_response = FulfillmentResponse()
+    fulfillment_message = ff_response.fulfillment_text(fulfillment_text)
+
+    user_delivery_type[sender_id] = "on_table"
+    fb_platform = FacebookResponse()
+    fb_text_response = fb_platform.text_response(['Please type your table number'])
+    ff_response = FulfillmentResponse()
+    quick_replies_response = ff_response.fulfillment_messages([fb_text_response])
+    reply = ff_response.main_response(fulfillment_message, quick_replies_response)
+    if DEBUG_LOG_ENABLE:
+        print(reply)
+    return reply
+
+
+# Place Order
+def place_order():
+    fulfillment_text = 'Place order'
+    ff_response = FulfillmentResponse()
+    fulfillment_message = ff_response.fulfillment_text(fulfillment_text)
+
+    fb_platform = FacebookResponse()
+    title = "Please, choose a delivery method:"
+    replies = ['On Table', 'Delivery', 'Pickup']
+    fb_quick_replies = fb_platform.quick_replies(title, replies)
+
+    ff_response = FulfillmentResponse()
+    quick_replies_response = ff_response.fulfillment_messages([fb_quick_replies])
+    reply = ff_response.main_response(fulfillment_message, quick_replies_response)
+    if DEBUG_LOG_ENABLE:
+        print(reply)
+    return reply
+
+
+# my cart
+def remove_my_cart(sender_id, remove_cart_item, food_category):
+    if str(food_category).lower() == "tacos".lower():
+        my_tacos_items = []
+        update_tacos_items = []
+        if sender_id in tacos_food_order:
+            my_tacos_items = tacos_food_order[sender_id]
+            for row in my_tacos_items:
+                if str(row['item_name']).lower() != str(remove_cart_item).lower():
+                    update_tacos_items.append(row)
+        if len(update_tacos_items) == 0:
+            tacos_food_order.pop(sender_id)
+        else:
+            tacos_food_order[sender_id] = update_tacos_items
+
+    return show_my_cart(sender_id)
+
+
+def show_my_cart(sender_id):
+    # Tacos food order
+    my_tacos_order = []
+    if sender_id in tacos_food_order:
+        my_tacos_order = tacos_food_order[sender_id]
+
+    #  check my cart empty
+    is_empty_my_cart = False
+    if len(my_tacos_order) == 0:
+        is_empty_my_cart = True
+
+    if is_empty_my_cart:
+        #  todo show my food category
+        fulfillment_text = 'empty my cart list'
+        ff_response = FulfillmentResponse()
+        fulfillment_message = ff_response.fulfillment_text(fulfillment_text)
+
+        fb_platform = FacebookResponse()
+        fb_text_replay = fb_platform.text_response(['Empty my cart list'])
+
+        ff_response = FulfillmentResponse()
+
+        quick_replies_response = ff_response.fulfillment_messages([fb_text_replay])
+        reply = ff_response.main_response(fulfillment_message, quick_replies_response)
+        if DEBUG_LOG_ENABLE:
+            print(reply)
+        return reply
+    else:
+        bangladeshi_tacos_1_item = 0
+        bangladeshi_tacos_2_item = 0
+        bangladeshi_tacos_3_item = 0
+
+        print("====show my cart====")
+        print(my_tacos_order)
+
+        for row in my_tacos_order:
+            if bool(row['status']):
+                if str(row['item_name']) == "bangladeshi tacos 1":
+                    bangladeshi_tacos_1_item = bangladeshi_tacos_1_item + int(row['quantity'])
+                    print("bangladeshi_tacos_1_item " + str(bangladeshi_tacos_1_item))
+                elif str(row['item_name']) == "bangladeshi tacos 2":
+                    bangladeshi_tacos_2_item = bangladeshi_tacos_2_item + int(row['quantity'])
+                    print("bangladeshi_tacos_2_item " + str(bangladeshi_tacos_2_item))
+                elif str(row['item_name']) == "bangladeshi tacos 3":
+                    bangladeshi_tacos_3_item = bangladeshi_tacos_3_item + int(row['quantity'])
+                    print("bangladeshi_tacos_3_item " + str(bangladeshi_tacos_3_item))
+
+        #  process response
+        fulfillment_text = 'process order'
+        ff_response = FulfillmentResponse()
+        fulfillment_message = ff_response.fulfillment_text(fulfillment_text)
+
+        fb_cart_order_response = []
+        fb_platform = FacebookResponse()
+
+        if bangladeshi_tacos_1_item > 0:
+            cart_title = str("bangladeshi tacos 1").title()
+            cart_sub_title = "Price " + str(bangladeshi_tacos_1_item * 5) + "$, Quantity: " + str(
+                bangladeshi_tacos_1_item)
+            call_back_text_place_order = "Place Order"  # intent
+            call_back_text_change_quantity = "change quantity bangladeshi tacos 1"  # todo need to intent
+            call_back_text_remove_from_cart = "remove from cart bangladeshi tacos 1 and food category tacos"  # todo need to intent
+            tacos_buttons = [
+                ['Place Order', call_back_text_place_order],
+                ['Change Quantity', call_back_text_change_quantity],
+                ['Remove From Cart', call_back_text_remove_from_cart]
+            ]
+            tacos = fb_platform.make_card_response(cart_title, cart_sub_title,
+                                                   "http://jalilurrahman.com/ChatBotImageResource/tacos1.jpeg",
+                                                   tacos_buttons)
+            fb_cart_order_response.append(tacos)
+
+        if bangladeshi_tacos_2_item > 0:
+            cart_title = str("bangladeshi tacos 2").title()
+            cart_sub_title = "Price " + str(bangladeshi_tacos_2_item * 7) + "$, Quantity: " + str(
+                bangladeshi_tacos_2_item)
+            call_back_text_place_order = "Place Order"  # intent
+            call_back_text_change_quantity = "change quantity bangladeshi tacos 2"  # todo need to intent
+            call_back_text_remove_from_cart = "remove from cart bangladeshi tacos 2 and food category tacos"  # todo need to intent
+            tacos_buttons = [
+                ['Place Order', call_back_text_place_order],
+                ['Change Quantity', call_back_text_change_quantity],
+                ['Remove From Cart', call_back_text_remove_from_cart]
+            ]
+            tacos = fb_platform.make_card_response(cart_title, cart_sub_title,
+                                                   "http://jalilurrahman.com/ChatBotImageResource/tacos2.jpeg",
+                                                   tacos_buttons)
+            fb_cart_order_response.append(tacos)
+        if bangladeshi_tacos_3_item > 0:
+            cart_title = str("bangladeshi tacos 3").title()
+            cart_sub_title = "Price " + str(bangladeshi_tacos_3_item * 10) + "$, Quantity: " + str(
+                bangladeshi_tacos_3_item)
+            call_back_text_place_order = "Place Order"  # intent
+            call_back_text_change_quantity = "change quantity bangladeshi tacos 3"  # todo need to intent
+            call_back_text_remove_from_cart = "remove from cart bangladeshi tacos 3 and food category tacos"  # todo need to intent
+            tacos_buttons = [
+                ['Place Order', call_back_text_place_order],
+                ['Change Quantity', call_back_text_change_quantity],
+                ['Remove From Cart', call_back_text_remove_from_cart]
+            ]
+            tacos = fb_platform.make_card_response(cart_title, cart_sub_title,
+                                                   "http://jalilurrahman.com/ChatBotImageResource/tacos3.jpeg",
+                                                   tacos_buttons)
+            fb_cart_order_response.append(tacos)
+
+        print(f"{len(fb_cart_order_response)}")
+        print(fb_cart_order_response)
+
+        # todo check order list is empty
+        # process facebook response
+        final_response = fb_platform.card_full_fillment(fb_cart_order_response)
+        reply = ff_response.main_response(fulfillment_message, final_response)
+        if DEBUG_LOG_ENABLE:
+            print(reply)
+        return reply
 
 
 # Food category order
@@ -311,7 +569,11 @@ def process_food_order_tacos_booking(sender_id, order_food_items, food_category_
     if sender_id in tacos_food_order:
         user_tacos_order = tacos_food_order[sender_id]
 
-    # todo filter status = false item remove from array
+    # remove item which are status false
+    for row in user_tacos_order:
+        if not bool(row['status']):
+            user_tacos_order.remove(row)
+
     if order_food_items == "bangladeshi tacos 1":
         new_tacos_order = {
             "item_name": str(order_food_items),
