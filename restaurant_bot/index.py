@@ -1,4 +1,7 @@
 from flask import Flask, request, jsonify, render_template
+from flask_cors import CORS, cross_origin
+# from flask_mysqldb import MySQL
+import mysql.connector
 import os
 import dialogflow
 import requests
@@ -7,10 +10,21 @@ import pusher
 import time
 
 app = Flask(__name__)
+CORS(app, support_credentials=True)
+
+# https://www.w3schools.com/python/python_mysql_insert.asp
+mydb = mysql.connector.connect(user='root', password='',
+                               host='localhost',
+                               database='restaurantBot')
+mycursor = mydb.cursor()
 
 user_info_dic = {}
 tacos_food_order = {}
 user_delivery_type = {}
+user_orders = {}
+
+# data cleanup when order success
+# user_info_dic{}, tacos_food_order{},user_delivery_type{},user_orders{}
 
 # initialize Pusher
 pusher_client = pusher.Pusher(
@@ -25,10 +39,17 @@ INTENT_FOOD_CATEGORY = "food.category"
 INTENT_MOVIE = "movie"
 
 DEBUG_LOG_ENABLE = True
+CONSOLE_BASE_URL = "http://localhost:4200/"
+CONSOLE_ORDER_END_POINT = "order/"
 
 
 @app.route('/')
 def index():
+    # sql = "INSERT INTO students (name, email, phone) VALUES (%s, %s, %s)"
+    # val = ("John", "Highway 21", "1234")
+    # mycursor.execute(sql, val)
+    # mydb.commit()
+    # print(mycursor.rowcount, "record inserted.")
     return render_template('index.html')
 
 
@@ -273,7 +294,8 @@ def process_for_facebook(data):
         update_user_last_trigger_time(sender_id)
         msg = "You have chosen on table order. Please, click checkout to proceed to payment. You can edit also your " \
               "cart content or delivery method from the option given below "
-        return confirm_order_message(sender_id, msg)
+        # return confirm_order_message(sender_id, msg)
+        return confirm_order(sender_id, msg)
     elif action == "order.confirm":
         sender_id = get_facebook_sender_id(data)
         update_user_last_trigger_time(sender_id)
@@ -283,14 +305,13 @@ def process_for_facebook(data):
 
 
 # confirm order
-def confirm_order(sender_id):
+def confirm_order(sender_id, msg):
     fulfillment_text = 'confirm order'
     ff_response = FulfillmentResponse()
     fulfillment_message = ff_response.fulfillment_text(fulfillment_text)
 
     fb_platform = FacebookResponse()
     fb_quick_replies = fb_platform.text_response("need to open website")
-
     ff_response = FulfillmentResponse()
     quick_replies_response = {
         "fulfillment_messages": [
@@ -301,13 +322,23 @@ def confirm_order(sender_id):
                             "type": "template",
                             "payload": {
                                 "template_type": "button",
-                                "text": "Try the URL button!",
+                                "text": str(msg),
                                 "buttons": [
                                     {
                                         "type": "web_url",
-                                        "url": "https://www.messenger.com/",
-                                        "title": "URL Button",
+                                        "url": str(CONSOLE_BASE_URL) + str(CONSOLE_ORDER_END_POINT) + str(sender_id),
+                                        "title": "Confirm Order",
                                         "webview_height_ratio": "tall"
+                                    },
+                                    {
+                                        "type": "postback",
+                                        "title": "Edit Cart",
+                                        "payload": "Edit Cart"
+                                    },
+                                    {
+                                        "type": "postback",
+                                        "title": "Edit Delivery",
+                                        "payload": "Edit Delivery"
                                     }
                                 ]
                             }
@@ -1247,11 +1278,238 @@ class FulfillmentResponse:
         return response
 
 
+# Rest Api
+@app.route('/confirmUserOrder', methods=['POST'])
+@cross_origin(supports_credentials=True)
+def rest_api_confirm_user_order():
+    data = request.get_json(silent=True)
+    json_response = []
+
+    name = "n/a"
+    email = "n/a"
+    address = "n/a"
+    phone = "n/a"
+    sender_id = "n/a"
+
+    if 'name' in data:
+        name = str(data['name'])
+    if 'email' in data:
+        email = str(data['email'])
+    if 'address' in data:
+        address = str(data['address'])
+    if 'phone' in data:
+        phone = str(data['phone'])
+    if 'sender_id' in data:
+        sender_id = str(data['sender_id'])
+
+    orders = []
+    if str(sender_id) in user_orders:
+        orders = user_orders[str(sender_id)]
+
+    print("====orders=====")
+    print(orders)
+
+    if len(orders) > 0:
+        order_id = str(int(round(time.time() * 1000)))
+        # insert user info
+        sql = "INSERT INTO user_info (order_id, name, address, email, phone_number, sender_id) VALUES (%s, %s, %s, %s, %s, %s)"
+        val = (order_id, name, address, email, phone, sender_id)
+        mycursor.execute(sql, val)
+        mydb.commit()
+        print(mycursor.rowcount, "user info record inserted.")
+
+        for row in orders:
+            image_url = row['image']
+            item_name = row['item_name']
+            quantity = row['quantity']
+            price = row['price']
+            discount = row['discount']
+            total_price = row['total_price']
+            sql = "INSERT INTO order_detail (order_id, image_url, item_name, quantity, price, discount, total_price) VALUES (%s, %s, %s, %s, %s, %s, %s)"
+            val = (order_id, image_url, item_name, quantity, price, discount, total_price)
+            mycursor.execute(sql, val)
+            mydb.commit()
+            print(mycursor.rowcount, "order_detail record inserted.")
+    else:
+        pass
+
+    print(data)
+
+    # user data remove
+    # user_info_dic
+    # {}, tacos_food_order
+    # {}, user_delivery_type
+    # {}, user_orders{}
+    if str(sender_id) in user_info_dic:
+        user_info_dic.pop(str(sender_id))
+        print(f"==user_info_dic == remove for {sender_id}")
+    if str(sender_id) in tacos_food_order:
+        tacos_food_order.pop(str(sender_id))
+        print(f"==tacos_food_order == remove for {sender_id}")
+    if str(sender_id) in user_delivery_type:
+        user_delivery_type.pop(str(sender_id))
+        print(f"==user_delivery_type == remove for {sender_id}")
+    if str(sender_id) in user_orders:
+        user_orders.pop(str(sender_id))
+        print(f"==user_orders == remove for {sender_id}")
+
+    print("===after remove data===")
+    print("==user_info_dic==")
+    print(user_info_dic)
+    print("==tacos_food_order==")
+    print(tacos_food_order)
+    print("==user_delivery_type==")
+    print(user_delivery_type)
+    print("==user_orders==")
+    print(user_orders)
+
+    if len(orders) == 0:
+        return jsonify({'success': False})
+    else:
+        return jsonify({'success': True})
+
+
+@app.route('/getUserOrder/<int:sender_id>', methods=['GET'])
+@cross_origin(supports_credentials=True)
+def rest_api_get_user_order(sender_id):
+    # if True: restult = {'2972612756100636': [{'item_name': 'bangladeshi tacos 1', 'price': 5, 'quantity': 1,
+    # 'status': True}, {'item_name': 'bangladeshi tacos 1', 'price': 5, 'quantity': 2, 'status': True}]}
+    #
+    #     print("===start ===")
+    #
+    #     # ok = restult[sender_id]
+    #     # print(ok)
+    #     my_tacos_order2 = []
+    #     if str(sender_id) in restult:
+    #         my_tacos_order2 = restult[str(sender_id)]
+    #
+    #     print("data")
+    #     print(my_tacos_order2)
+    #     # print(type(sender_id))
+    #     # print(type(restult))
+    #     print(restult)
+    #     data = []
+    #     row = {
+    #         "image": "http://jalilurrahman.com/ChatBotImageResource/tacos1.jpeg",
+    #         "item_name": "cart_title",
+    #         "quantity": "3",
+    #         "price": "4",
+    #         "discount": "0",
+    #         "total_price": "12"
+    #     }
+    #     data.append(row)
+    #     print("=====here====")
+    #     row = {
+    #         "image": "http://jalilurrahman.com/ChatBotImageResource/tacos2.jpeg",
+    #         "item_name": "cart_title",
+    #         "quantity": "3",
+    #         "price": "4",
+    #         "discount": "0",
+    #         "total_price": "12"
+    #     }
+    #     data.append(row)
+    #     print("====== data ===")
+    #     print(data)
+    #     print("===== end ====")
+    #     return jsonify(data)
+
+    print(f"==api call start == {sender_id}")
+    result = []
+    print(tacos_food_order)
+    # Tacos food order
+    # send2 = str()
+    my_tacos_order = []
+    if str(sender_id) in tacos_food_order:
+        my_tacos_order = tacos_food_order[str(sender_id)]
+
+    print("==my_tacos_order==")
+    print(my_tacos_order)
+
+    #  check my cart empty
+    is_empty_my_cart = False
+    if len(my_tacos_order) == 0:
+        is_empty_my_cart = True
+
+    if is_empty_my_cart:
+        pass
+    else:
+        bangladeshi_tacos_1_item = 0
+        bangladeshi_tacos_2_item = 0
+        bangladeshi_tacos_3_item = 0
+
+        print("====show my cart====")
+        print(my_tacos_order)
+
+        for row in my_tacos_order:
+            if bool(row['status']):
+                if str(row['item_name']) == "bangladeshi tacos 1":
+                    bangladeshi_tacos_1_item = bangladeshi_tacos_1_item + int(row['quantity'])
+                    print("bangladeshi_tacos_1_item " + str(bangladeshi_tacos_1_item))
+                elif str(row['item_name']) == "bangladeshi tacos 2":
+                    bangladeshi_tacos_2_item = bangladeshi_tacos_2_item + int(row['quantity'])
+                    print("bangladeshi_tacos_2_item " + str(bangladeshi_tacos_2_item))
+                elif str(row['item_name']) == "bangladeshi tacos 3":
+                    bangladeshi_tacos_3_item = bangladeshi_tacos_3_item + int(row['quantity'])
+                    print("bangladeshi_tacos_3_item " + str(bangladeshi_tacos_3_item))
+
+        if bangladeshi_tacos_1_item > 0:
+            cart_title = str("bangladeshi tacos 1").title()
+            row = {
+                "image": "http://jalilurrahman.com/ChatBotImageResource/tacos1.jpeg",
+                "item_name": cart_title,
+                "quantity": str(bangladeshi_tacos_1_item),
+                "price": str(bangladeshi_tacos_1_item * 5),
+                "discount": "0",
+                "total_price": str(bangladeshi_tacos_1_item * 5)
+            }
+            result.append(row)
+
+        if bangladeshi_tacos_2_item > 0:
+            cart_title = str("bangladeshi tacos 2").title()
+            row = {
+                "image": "http://jalilurrahman.com/ChatBotImageResource/tacos2.jpeg",
+                "item_name": cart_title,
+                "quantity": str(bangladeshi_tacos_2_item),
+                "price": str(bangladeshi_tacos_2_item * 7),
+                "discount": "0",
+                "total_price": str(bangladeshi_tacos_2_item * 7)
+            }
+            result.append(row)
+
+        if bangladeshi_tacos_3_item > 0:
+            cart_title = str("bangladeshi tacos 3").title()
+            row = {
+                "image": "http://jalilurrahman.com/ChatBotImageResource/tacos3.jpeg",
+                "item_name": cart_title,
+                "quantity": str(bangladeshi_tacos_3_item),
+                "price": str(bangladeshi_tacos_3_item * 10),
+                "discount": "0",
+                "total_price": str(bangladeshi_tacos_3_item * 10)
+            }
+            result.append(row)
+
+        user_orders[str(sender_id)] = result
+        print(user_orders)
+        print(result)
+        print(f"==api call end == {sender_id}")
+        return jsonify(result)
+
+
 class UserModel:
     def __init__(self):
         self.user_id = ""
         self.last_update = ""
         self.current_food_category = ""
+
+
+class OrderModel:
+    def __int__(self):
+        self.image = ""
+        self.item_name = ""
+        self.quantity = ""
+        self.price = ""
+        self.discount = ""
+        self.total_price = ""
 
 
 # run Flask app

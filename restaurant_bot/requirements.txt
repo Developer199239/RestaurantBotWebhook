@@ -3,6 +3,12 @@ requests==2.22.0
 dialogflow==0.7.2
 python-dotenv==0.10.3
 pusher==2.1.4
+# Flask-Cors==3.0.8
+
+
+# manually
+# pip install -U flask-cors
+# pip install mysql-connector
 
 # python -m venv env
 # source env/bin/activate
