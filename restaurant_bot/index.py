@@ -276,7 +276,7 @@ def process_for_facebook(data):
     elif action == "show.cart":
         sender_id = get_facebook_sender_id(data)
         update_user_last_trigger_time(sender_id)
-        return show_my_cart(sender_id)
+        return show_my_cart(sender_id, "")
     elif action == "cart.remove":
         sender_id = get_facebook_sender_id(data)
         update_user_last_trigger_time(sender_id)
@@ -300,8 +300,69 @@ def process_for_facebook(data):
         sender_id = get_facebook_sender_id(data)
         update_user_last_trigger_time(sender_id)
         return confirm_order(sender_id)
+    elif action == "change.quantity":
+        return process_change_quantity(data)
+    elif action == "update.quantity":
+        return process_update_quantity(data)
+        pass
     else:
         return "nothing"
+
+
+# Update quantity
+def process_update_quantity(data):
+    sender_id = get_facebook_sender_id(data)
+    update_user_last_trigger_time(sender_id)
+
+    output_contexs = data['queryResult']['outputContexts']
+    update_order_food_item_name = ""
+    order_quantity_number = ""
+    for row in output_contexs:
+        if "parameters" in row:
+            parameters = row['parameters']
+            if "order_food_items" in parameters:
+                update_order_food_item_name = str(parameters['order_food_items'])
+            if "order_quantity_number" in parameters:
+                order_quantity_number = str(parameters['update_quantity_number'])
+            if len(str(update_order_food_item_name)) > 0 & len(str(order_quantity_number)) > 0:
+                break
+
+    # update quantity
+    update_tacos_items = []
+    if sender_id in tacos_food_order:
+        my_tacos_items = tacos_food_order[sender_id]
+        for row in my_tacos_items:
+            if str(row['item_name']).lower() == str(update_order_food_item_name).lower():
+                row['quantity'] = str(order_quantity_number)
+            update_tacos_items.append(row)
+    tacos_food_order[sender_id] = update_tacos_items
+    return show_my_cart(sender_id, "Here your update cart list")
+
+
+# Change quantity
+def process_change_quantity(data):
+    sender_id = get_facebook_sender_id(data)
+    update_user_last_trigger_time(sender_id)
+    order_food_items = data['queryResult']['parameters'][
+        'order_food_items']
+
+    fulfillment_text = 'confirm order'
+    ff_response = FulfillmentResponse()
+    fulfillment_message = ff_response.fulfillment_text(fulfillment_text)
+
+    fb_platform = FacebookResponse()
+    msg = "How many items of " + order_food_items + " do you need?"
+    replies = ['1', '2', '3', '4', '5', '6', '7', '8']
+    fb_quick_replies = fb_platform.quick_replies(msg, replies)
+
+    ff_response = FulfillmentResponse()
+    quick_replies_response = ff_response.fulfillment_messages([fb_quick_replies])
+    reply = ff_response.main_response(fulfillment_message, quick_replies_response)
+    if DEBUG_LOG_ENABLE:
+        print(reply)
+    return reply
+
+    pass
 
 
 # confirm order
@@ -423,10 +484,10 @@ def remove_my_cart(sender_id, remove_cart_item, food_category):
         else:
             tacos_food_order[sender_id] = update_tacos_items
 
-    return show_my_cart(sender_id)
+    return show_my_cart(sender_id, "Here your update cart list")
 
 
-def show_my_cart(sender_id):
+def show_my_cart(sender_id, msg):
     # Tacos food order
     my_tacos_order = []
     if sender_id in tacos_food_order:
@@ -464,13 +525,13 @@ def show_my_cart(sender_id):
         for row in my_tacos_order:
             if bool(row['status']):
                 if str(row['item_name']) == "bangladeshi tacos 1":
-                    bangladeshi_tacos_1_item = bangladeshi_tacos_1_item + int(row['quantity'])
+                    bangladeshi_tacos_1_item = bangladeshi_tacos_1_item + float(row['quantity'])
                     print("bangladeshi_tacos_1_item " + str(bangladeshi_tacos_1_item))
                 elif str(row['item_name']) == "bangladeshi tacos 2":
-                    bangladeshi_tacos_2_item = bangladeshi_tacos_2_item + int(row['quantity'])
+                    bangladeshi_tacos_2_item = bangladeshi_tacos_2_item + float(row['quantity'])
                     print("bangladeshi_tacos_2_item " + str(bangladeshi_tacos_2_item))
                 elif str(row['item_name']) == "bangladeshi tacos 3":
-                    bangladeshi_tacos_3_item = bangladeshi_tacos_3_item + int(row['quantity'])
+                    bangladeshi_tacos_3_item = bangladeshi_tacos_3_item + float(row['quantity'])
                     print("bangladeshi_tacos_3_item " + str(bangladeshi_tacos_3_item))
 
         #  process response
@@ -536,11 +597,18 @@ def show_my_cart(sender_id):
 
         # todo check order list is empty
         # process facebook response
-        final_response = fb_platform.card_full_fillment(fb_cart_order_response)
-        reply = ff_response.main_response(fulfillment_message, final_response)
-        if DEBUG_LOG_ENABLE:
-            print(reply)
-        return reply
+        if len(str(msg)) > 0:
+            final_response = fb_platform.card_full_fillment(fb_cart_order_response)
+            reply = ff_response.main_response(fulfillment_message, final_response)
+            if DEBUG_LOG_ENABLE:
+                print(reply)
+            return reply
+        else:
+            final_response = fb_platform.card_full_fillment(fb_cart_order_response)
+            reply = ff_response.main_response(fulfillment_message, final_response)
+            if DEBUG_LOG_ENABLE:
+                print(reply)
+            return reply
 
 
 # Food category order
@@ -974,6 +1042,45 @@ class FacebookResponse:
                 "platform": self.platform
             }
 
+    def quick_replies2(self, title, quick_replies_list):
+        if title == "":
+            raise Exception("Title is required for basic card in facebook.")
+        # quick_replies_list must contains at least one string
+        elif len(quick_replies_list) <= 0:
+            raise Exception(
+                "Quick replies response must contain at least on text string.")
+        else:
+            # quick replies list to store the quick replie text
+            quick_replies = []
+            for quick_reply in quick_replies_list:
+                # append to the list
+                quick_replies.append(
+                    str(quick_reply)
+                )
+
+            qu = [
+                {
+                    "content_type": "text",
+                    "title": "Red",
+                    "payload": "<POSTBACK_PAYLOAD>",
+                    "image_url": "http://example.com/img/red.png"
+                }, {
+                    "content_type": "text",
+                    "title": "Green",
+                    "payload": "<POSTBACK_PAYLOAD>",
+                    "image_url": "http://example.com/img/green.png"
+                }
+            ]
+
+            # return the response JSON
+            return {
+                "quickReplies": {
+                    "title": str(title),
+                    "quickReplies": qu
+                },
+                "platform": self.platform
+            }
+
     def image_response(self, url):
         # check url
         if url == "":
@@ -1364,9 +1471,9 @@ def rest_api_confirm_user_order():
     print(user_orders)
 
     if len(orders) == 0:
-        return jsonify({'success': False})
+        return jsonify({'success': False, 'message': "order list not found"})
     else:
-        return jsonify({'success': True})
+        return jsonify({'success': True, 'message': "success"})
 
 
 @app.route('/getUserOrder/<int:sender_id>', methods=['GET'])
@@ -1443,13 +1550,13 @@ def rest_api_get_user_order(sender_id):
         for row in my_tacos_order:
             if bool(row['status']):
                 if str(row['item_name']) == "bangladeshi tacos 1":
-                    bangladeshi_tacos_1_item = bangladeshi_tacos_1_item + int(row['quantity'])
+                    bangladeshi_tacos_1_item = bangladeshi_tacos_1_item + float(row['quantity'])
                     print("bangladeshi_tacos_1_item " + str(bangladeshi_tacos_1_item))
                 elif str(row['item_name']) == "bangladeshi tacos 2":
-                    bangladeshi_tacos_2_item = bangladeshi_tacos_2_item + int(row['quantity'])
+                    bangladeshi_tacos_2_item = bangladeshi_tacos_2_item + float(row['quantity'])
                     print("bangladeshi_tacos_2_item " + str(bangladeshi_tacos_2_item))
                 elif str(row['item_name']) == "bangladeshi tacos 3":
-                    bangladeshi_tacos_3_item = bangladeshi_tacos_3_item + int(row['quantity'])
+                    bangladeshi_tacos_3_item = bangladeshi_tacos_3_item + float(row['quantity'])
                     print("bangladeshi_tacos_3_item " + str(bangladeshi_tacos_3_item))
 
         if bangladeshi_tacos_1_item > 0:
