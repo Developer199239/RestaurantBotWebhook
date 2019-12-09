@@ -19,7 +19,7 @@ mydb = mysql.connector.connect(user='root', password='',
 mycursor = mydb.cursor()
 
 user_info_dic = {}
-food_order = {}
+tacos_food_order = {}
 user_delivery_type = {}
 user_orders = {}
 
@@ -221,9 +221,9 @@ def process_for_facebook(data):
         if str(food_category_order).lower() == "tacos":
             return process_food_order_tacos(food_category)
         elif str(food_category_order).lower() == "pizza":
-            return process_food_order_pizza(food_category)
+            pass
         elif str(food_category_order).lower() == "burger":
-            return process_food_order_burger(food_category)
+            pass
     elif action == "food.category.order.items":
         sender_id = get_facebook_sender_id(data)
         update_user_last_trigger_time(sender_id)
@@ -243,9 +243,9 @@ def process_for_facebook(data):
         if food_category == "tacos":
             return process_food_order_tacos_booking(sender_id, order_food_items, food_category_type)
         elif food_category == "pizza":
-            return process_food_order_pizza_booking(sender_id, order_food_items, food_category_type)
+            pass
         elif food_category == "burger":
-            return process_food_order_burger_booking(sender_id, order_food_items, food_category_type)
+            pass
     elif action == "order.quantity":
         if DEBUG_LOG_ENABLE:
             print("#########")
@@ -268,11 +268,11 @@ def process_for_facebook(data):
             'order_quantity_number']  # 1, 2, 3... order quantity number
 
         if food_category == "tacos":
-            return process_food_order_quantity(sender_id, food_category, order_food_items, order_quantity_number)
+            return process_food_order_tacos_quantity(sender_id, food_category, order_food_items, order_quantity_number)
         elif food_category == "pizza":
-            return process_food_order_quantity(sender_id, food_category, order_food_items, order_quantity_number)
+            pass
         elif food_category == "burger":
-            return process_food_order_quantity(sender_id, food_category, order_food_items, order_quantity_number)
+            pass
     elif action == "show.cart":
         sender_id = get_facebook_sender_id(data)
         update_user_last_trigger_time(sender_id)
@@ -285,16 +285,14 @@ def process_for_facebook(data):
         return remove_my_cart(sender_id, remove_cart_item, food_category)
     elif action == "place.order":
         return place_order()
-    elif action == "place.order.type":
+    elif action == "place.order.on.table":
         sender_id = get_facebook_sender_id(data)
         update_user_last_trigger_time(sender_id)
-        return place_order_type(sender_id, data)
+        return place_order_on_table(sender_id)
     elif action == "place.order.on.table.number":
         sender_id = get_facebook_sender_id(data)
         update_user_last_trigger_time(sender_id)
-        place_ordertype = user_delivery_type[sender_id]
-        msg = f"You have chosen ${place_ordertype} order. Please, click checkout to proceed to payment. You can edit " \
-              f"also your " \
+        msg = "You have chosen on table order. Please, click checkout to proceed to payment. You can edit also your " \
               "cart content or delivery method from the option given below "
         # return confirm_order_message(sender_id, msg)
         return confirm_order(sender_id, msg)
@@ -306,10 +304,7 @@ def process_for_facebook(data):
         return process_change_quantity(data)
     elif action == "update.quantity":
         return process_update_quantity(data)
-    elif action == "restaurant.get.direction":
-        sender_id = get_facebook_sender_id(data)
-        update_user_last_trigger_time(sender_id)
-        return get_restaurant_direction(sender_id,data)
+        pass
     else:
         return "nothing"
 
@@ -334,13 +329,13 @@ def process_update_quantity(data):
 
     # update quantity
     update_tacos_items = []
-    if sender_id in food_order:
-        my_tacos_items = food_order[sender_id]
+    if sender_id in tacos_food_order:
+        my_tacos_items = tacos_food_order[sender_id]
         for row in my_tacos_items:
             if str(row['item_name']).lower() == str(update_order_food_item_name).lower():
                 row['quantity'] = str(order_quantity_number)
             update_tacos_items.append(row)
-    food_order[sender_id] = update_tacos_items
+    tacos_food_order[sender_id] = update_tacos_items
     return show_my_cart(sender_id, "Here your update cart list")
 
 
@@ -404,7 +399,7 @@ def confirm_order(sender_id, msg):
                                     {
                                         "type": "postback",
                                         "title": "Edit Delivery",
-                                        "payload": "place my order"
+                                        "payload": "Edit Delivery"
                                     }
                                 ]
                             }
@@ -439,29 +434,20 @@ def confirm_order_message(sender_id, msg):
 
 
 # Place order on table
-def place_order_type(sender_id, data):
-    update_user_last_trigger_time(sender_id)
-    delivery_type = data['queryResult']['parameters']['delivery_type']
-    user_delivery_type[sender_id] = delivery_type
-    if str(delivery_type).lower() == "pickup".lower():
-        pass
-    elif str(delivery_type).lower() == "delivery".lower():
-        msg = f"You have chosen ${str(delivery_type)} order. Please, click checkout to proceed to payment. You can edit " \
-              f"also your " \
-              "cart content or delivery method from the option given below "
-        return confirm_order(sender_id, msg)
-    elif str(delivery_type).lower() == "on table".lower():
-        fulfillment_text = 'Place order on table'
-        ff_response = FulfillmentResponse()
-        fulfillment_message = ff_response.fulfillment_text(fulfillment_text)
-        fb_platform = FacebookResponse()
-        fb_text_response = fb_platform.text_response(['Please type your table number'])
-        ff_response = FulfillmentResponse()
-        quick_replies_response = ff_response.fulfillment_messages([fb_text_response])
-        reply = ff_response.main_response(fulfillment_message, quick_replies_response)
-        if DEBUG_LOG_ENABLE:
-            print(reply)
-        return reply
+def place_order_on_table(sender_id):
+    fulfillment_text = 'Place order on table'
+    ff_response = FulfillmentResponse()
+    fulfillment_message = ff_response.fulfillment_text(fulfillment_text)
+
+    user_delivery_type[sender_id] = "on_table"
+    fb_platform = FacebookResponse()
+    fb_text_response = fb_platform.text_response(['Please type your table number'])
+    ff_response = FulfillmentResponse()
+    quick_replies_response = ff_response.fulfillment_messages([fb_text_response])
+    reply = ff_response.main_response(fulfillment_message, quick_replies_response)
+    if DEBUG_LOG_ENABLE:
+        print(reply)
+    return reply
 
 
 # Place Order
@@ -485,24 +471,27 @@ def place_order():
 
 # my cart
 def remove_my_cart(sender_id, remove_cart_item, food_category):
-    update_tacos_items = []
-    if sender_id in food_order:
-        my_tacos_items = food_order[sender_id]
-        for row in my_tacos_items:
-            if str(row['item_name']).lower() != str(remove_cart_item).lower():
-                update_tacos_items.append(row)
-    if len(update_tacos_items) == 0:
-        food_order.pop(sender_id)
-    else:
-        food_order[sender_id] = update_tacos_items
+    if str(food_category).lower() == "tacos".lower():
+        my_tacos_items = []
+        update_tacos_items = []
+        if sender_id in tacos_food_order:
+            my_tacos_items = tacos_food_order[sender_id]
+            for row in my_tacos_items:
+                if str(row['item_name']).lower() != str(remove_cart_item).lower():
+                    update_tacos_items.append(row)
+        if len(update_tacos_items) == 0:
+            tacos_food_order.pop(sender_id)
+        else:
+            tacos_food_order[sender_id] = update_tacos_items
+
     return show_my_cart(sender_id, "Here your update cart list")
 
 
 def show_my_cart(sender_id, msg):
     # Tacos food order
     my_tacos_order = []
-    if sender_id in food_order:
-        my_tacos_order = food_order[sender_id]
+    if sender_id in tacos_food_order:
+        my_tacos_order = tacos_food_order[sender_id]
 
     #  check my cart empty
     is_empty_my_cart = False
@@ -530,26 +519,6 @@ def show_my_cart(sender_id, msg):
         bangladeshi_tacos_2_item = 0
         bangladeshi_tacos_3_item = 0
 
-        bangladeshi_pizza_1_item = 0
-        bangladeshi_pizza_2_item = 0
-        bangladeshi_pizza_3_item = 0
-
-        bangladeshi_burger_1_item = 0
-        bangladeshi_burger_2_item = 0
-        bangladeshi_burger_3_item = 0
-
-        mexican_tacos_1_item = 0
-        mexican_tacos_2_item = 0
-        mexican_tacos_3_item = 0
-
-        mexican_pizza_1_item = 0
-        mexican_pizza_2_item = 0
-        mexican_pizza_3_item = 0
-
-        mexican_burger_1_item = 0
-        mexican_burger_2_item = 0
-        mexican_burger_3_item = 0
-
         print("====show my cart====")
         print(my_tacos_order)
 
@@ -564,51 +533,6 @@ def show_my_cart(sender_id, msg):
                 elif str(row['item_name']) == "bangladeshi tacos 3":
                     bangladeshi_tacos_3_item = bangladeshi_tacos_3_item + float(row['quantity'])
                     print("bangladeshi_tacos_3_item " + str(bangladeshi_tacos_3_item))
-                elif str(row['item_name']) == "bangladeshi pizza 1":
-                    bangladeshi_pizza_1_item = bangladeshi_pizza_1_item + float(row['quantity'])
-                    print("bangladeshi_pizza_1_item " + str(bangladeshi_pizza_1_item))
-                elif str(row['item_name']) == "bangladeshi pizza 2":
-                    bangladeshi_pizza_2_item = bangladeshi_pizza_2_item + float(row['quantity'])
-                    print("bangladeshi_pizza_2_item " + str(bangladeshi_pizza_2_item))
-                elif str(row['item_name']) == "bangladeshi pizza 3":
-                    bangladeshi_pizza_3_item = bangladeshi_pizza_3_item + float(row['quantity'])
-                    print("bangladeshi_pizza_3_item " + str(bangladeshi_pizza_3_item))
-                elif str(row['item_name']) == "bangladeshi burger 1":
-                    bangladeshi_burger_1_item = bangladeshi_burger_1_item + float(row['quantity'])
-                    print("bangladeshi_burger_1_item " + str(bangladeshi_burger_1_item))
-                elif str(row['item_name']) == "bangladeshi burger 2":
-                    bangladeshi_burger_2_item = bangladeshi_burger_2_item + float(row['quantity'])
-                    print("bangladeshi_burger_2_item " + str(bangladeshi_burger_2_item))
-                elif str(row['item_name']) == "bangladeshi burger 3":
-                    bangladeshi_burger_3_item = bangladeshi_burger_3_item + float(row['quantity'])
-                    print("bangladeshi_burger_3_item " + str(bangladeshi_burger_3_item))
-                elif str(row['item_name']) == "mexicun tacos 1":
-                    mexican_tacos_1_item = mexican_tacos_1_item + float(row['quantity'])
-                    print("mexican_tacos_1_item " + str(mexican_tacos_1_item))
-                elif str(row['item_name']) == "mexicun tacos 2":
-                    mexican_tacos_2_item = mexican_tacos_2_item + float(row['quantity'])
-                    print("mexican_tacos_2_item " + str(mexican_tacos_2_item))
-                elif str(row['item_name']) == "mexicun tacos 3":
-                    mexican_tacos_3_item = mexican_tacos_3_item + float(row['quantity'])
-                    print("mexican_tacos_2_item " + str(mexican_tacos_3_item))
-                elif str(row['item_name']) == "mexicun pizza 1":
-                    mexican_pizza_1_item = mexican_pizza_1_item + float(row['quantity'])
-                    print("mexican_pizza_1_item " + str(mexican_pizza_1_item))
-                elif str(row['item_name']) == "mexicun pizza 2":
-                    mexican_pizza_2_item = mexican_pizza_2_item + float(row['quantity'])
-                    print("mexican_pizza_2_item " + str(mexican_pizza_2_item))
-                elif str(row['item_name']) == "mexicun pizza 3":
-                    mexican_pizza_3_item = mexican_pizza_3_item + float(row['quantity'])
-                    print("mexican_pizza_3_item " + str(mexican_pizza_3_item))
-                elif str(row['item_name']) == "mexicun burger 1":
-                    mexican_burger_1_item = mexican_burger_1_item + float(row['quantity'])
-                    print("mexican_burger_1_item " + str(mexican_burger_1_item))
-                elif str(row['item_name']) == "mexicun burger 2":
-                    mexican_burger_2_item = mexican_burger_2_item + float(row['quantity'])
-                    print("mexican_burger_2_item " + str(mexican_burger_2_item))
-                elif str(row['item_name']) == "mexicun burger 3":
-                    mexican_burger_3_item = mexican_burger_3_item + float(row['quantity'])
-                    print("mexican_burger_3_item " + str(mexican_burger_3_item))
 
         #  process response
         fulfillment_text = 'process order'
@@ -618,7 +542,6 @@ def show_my_cart(sender_id, msg):
         fb_cart_order_response = []
         fb_platform = FacebookResponse()
 
-        #  ===== tacos =========
         if bangladeshi_tacos_1_item > 0:
             cart_title = str("bangladeshi tacos 1").title()
             cart_sub_title = "Price " + str(bangladeshi_tacos_1_item * 5) + "$, Quantity: " + str(
@@ -633,23 +556,6 @@ def show_my_cart(sender_id, msg):
             ]
             tacos = fb_platform.make_card_response(cart_title, cart_sub_title,
                                                    "http://jalilurrahman.com/ChatBotImageResource/tacos1.jpeg",
-                                                   tacos_buttons)
-            fb_cart_order_response.append(tacos)
-
-        if mexican_tacos_1_item > 0:
-            cart_title = str("mexicun tacos 1").title()
-            cart_sub_title = "Price " + str(mexican_tacos_1_item * 5) + "$, Quantity: " + str(
-                mexican_tacos_1_item)
-            call_back_text_place_order = "Place Order"  # intent
-            call_back_text_change_quantity = "change quantity mexicun tacos 1"  # todo need to intent
-            call_back_text_remove_from_cart = "remove from cart mexicun tacos 1 and food category tacos"  # todo need to intent
-            tacos_buttons = [
-                ['Place Order', call_back_text_place_order],
-                ['Change Quantity', call_back_text_change_quantity],
-                ['Remove From Cart', call_back_text_remove_from_cart]
-            ]
-            tacos = fb_platform.make_card_response(cart_title, cart_sub_title,
-                                                   "http://jalilurrahman.com/ChatBotImageResource/mexican_tacos_1.jpeg",
                                                    tacos_buttons)
             fb_cart_order_response.append(tacos)
 
@@ -669,23 +575,6 @@ def show_my_cart(sender_id, msg):
                                                    "http://jalilurrahman.com/ChatBotImageResource/tacos2.jpeg",
                                                    tacos_buttons)
             fb_cart_order_response.append(tacos)
-        if mexican_tacos_2_item > 0:
-            cart_title = str("mexicun tacos 2").title()
-            cart_sub_title = "Price " + str(mexican_tacos_2_item * 7) + "$, Quantity: " + str(
-                mexican_tacos_2_item)
-            call_back_text_place_order = "Place Order"  # intent
-            call_back_text_change_quantity = "change quantity mexicun tacos 2"  # todo need to intent
-            call_back_text_remove_from_cart = "remove from cart mexicun tacos 2 and food category tacos"  # todo need to intent
-            tacos_buttons = [
-                ['Place Order', call_back_text_place_order],
-                ['Change Quantity', call_back_text_change_quantity],
-                ['Remove From Cart', call_back_text_remove_from_cart]
-            ]
-            tacos = fb_platform.make_card_response(cart_title, cart_sub_title,
-                                                   "http://jalilurrahman.com/ChatBotImageResource/mexican_tacos_2.jpeg",
-                                                   tacos_buttons)
-            fb_cart_order_response.append(tacos)
-
         if bangladeshi_tacos_3_item > 0:
             cart_title = str("bangladeshi tacos 3").title()
             cart_sub_title = "Price " + str(bangladeshi_tacos_3_item * 10) + "$, Quantity: " + str(
@@ -702,234 +591,6 @@ def show_my_cart(sender_id, msg):
                                                    "http://jalilurrahman.com/ChatBotImageResource/tacos3.jpeg",
                                                    tacos_buttons)
             fb_cart_order_response.append(tacos)
-        if mexican_tacos_3_item > 0:
-            cart_title = str("mexicun tacos 3").title()
-            cart_sub_title = "Price " + str(mexican_tacos_3_item * 10) + "$, Quantity: " + str(
-                mexican_tacos_3_item)
-            call_back_text_place_order = "Place Order"  # intent
-            call_back_text_change_quantity = "change quantity mexicun tacos 3"  # todo need to intent
-            call_back_text_remove_from_cart = "remove from cart mexicun tacos 3 and food category tacos"  # todo need to intent
-            tacos_buttons = [
-                ['Place Order', call_back_text_place_order],
-                ['Change Quantity', call_back_text_change_quantity],
-                ['Remove From Cart', call_back_text_remove_from_cart]
-            ]
-            tacos = fb_platform.make_card_response(cart_title, cart_sub_title,
-                                                   "http://jalilurrahman.com/ChatBotImageResource/mexican_tacos_3.jpg",
-                                                   tacos_buttons)
-            fb_cart_order_response.append(tacos)
-
-        # ======= Bangladeshi Pizza ==========
-        if bangladeshi_pizza_1_item > 0:
-            cart_title = str("bangladeshi pizza 1").title()
-            cart_sub_title = "Price " + str(bangladeshi_pizza_1_item * 5) + "$, Quantity: " + str(
-                bangladeshi_pizza_1_item)
-            call_back_text_place_order = "Place Order"  # intent
-            call_back_text_change_quantity = "change quantity bangladeshi pizza 1"
-            call_back_text_remove_from_cart = "remove from cart bangladeshi pizza 1 and food category pizza"
-            tacos_buttons = [
-                ['Place Order', call_back_text_place_order],
-                ['Change Quantity', call_back_text_change_quantity],
-                ['Remove From Cart', call_back_text_remove_from_cart]
-            ]
-            pizza = fb_platform.make_card_response(cart_title, cart_sub_title,
-                                                   "http://jalilurrahman.com/ChatBotImageResource/bangladeshi_pizza_1"
-                                                   ".jpg",
-                                                   tacos_buttons)
-            fb_cart_order_response.append(pizza)
-        if mexican_pizza_1_item > 0:
-            cart_title = str("mexicun pizza 1").title()
-            cart_sub_title = "Price " + str(mexican_pizza_1_item * 5) + "$, Quantity: " + str(
-                mexican_pizza_1_item)
-            call_back_text_place_order = "Place Order"  # intent
-            call_back_text_change_quantity = "change quantity mexicun pizza 1"
-            call_back_text_remove_from_cart = "remove from cart mexicun pizza 1 and food category pizza"
-            tacos_buttons = [
-                ['Place Order', call_back_text_place_order],
-                ['Change Quantity', call_back_text_change_quantity],
-                ['Remove From Cart', call_back_text_remove_from_cart]
-            ]
-            pizza = fb_platform.make_card_response(cart_title, cart_sub_title,
-                                                   "http://jalilurrahman.com/ChatBotImageResource/mexican_pizza_1.jpeg"
-                                                   ".jpg",
-                                                   tacos_buttons)
-            fb_cart_order_response.append(pizza)
-
-        if bangladeshi_pizza_2_item > 0:
-            cart_title = str("bangladeshi pizza 2").title()
-            cart_sub_title = "Price " + str(bangladeshi_pizza_2_item * 5) + "$, Quantity: " + str(
-                bangladeshi_pizza_2_item)
-            call_back_text_place_order = "Place Order"  # intent
-            call_back_text_change_quantity = "change quantity bangladeshi pizza 2"
-            call_back_text_remove_from_cart = "remove from cart bangladeshi pizza 2 and food category pizza"
-            tacos_buttons = [
-                ['Place Order', call_back_text_place_order],
-                ['Change Quantity', call_back_text_change_quantity],
-                ['Remove From Cart', call_back_text_remove_from_cart]
-            ]
-            pizza = fb_platform.make_card_response(cart_title, cart_sub_title,
-                                                   "http://jalilurrahman.com/ChatBotImageResource/bangladeshi_pizza_2"
-                                                   ".jpg",
-                                                   tacos_buttons)
-            fb_cart_order_response.append(pizza)
-        if mexican_pizza_2_item > 0:
-            cart_title = str("mexicun pizza 2").title()
-            cart_sub_title = "Price " + str(mexican_pizza_2_item * 5) + "$, Quantity: " + str(
-                mexican_pizza_2_item)
-            call_back_text_place_order = "Place Order"  # intent
-            call_back_text_change_quantity = "change quantity mexicun pizza 2"
-            call_back_text_remove_from_cart = "remove from cart mexicun pizza 2 and food category pizza"
-            tacos_buttons = [
-                ['Place Order', call_back_text_place_order],
-                ['Change Quantity', call_back_text_change_quantity],
-                ['Remove From Cart', call_back_text_remove_from_cart]
-            ]
-            pizza = fb_platform.make_card_response(cart_title, cart_sub_title,
-                                                   "http://jalilurrahman.com/ChatBotImageResource/mexican_pizza_2.jpeg"
-                                                   ".jpg",
-                                                   tacos_buttons)
-            fb_cart_order_response.append(pizza)
-
-        if bangladeshi_pizza_3_item > 0:
-            cart_title = str("bangladeshi pizza 3").title()
-            cart_sub_title = "Price " + str(bangladeshi_pizza_3_item * 5) + "$, Quantity: " + str(
-                bangladeshi_pizza_3_item)
-            call_back_text_place_order = "Place Order"  # intent
-            call_back_text_change_quantity = "change quantity bangladeshi pizza 3"
-            call_back_text_remove_from_cart = "remove from cart bangladeshi pizza 3 and food category pizza"
-            tacos_buttons = [
-                ['Place Order', call_back_text_place_order],
-                ['Change Quantity', call_back_text_change_quantity],
-                ['Remove From Cart', call_back_text_remove_from_cart]
-            ]
-            pizza = fb_platform.make_card_response(cart_title, cart_sub_title,
-                                                   "http://jalilurrahman.com/ChatBotImageResource/bangladeshi_pizza_3"
-                                                   ".jpeg",
-                                                   tacos_buttons)
-            fb_cart_order_response.append(pizza)
-        if mexican_pizza_3_item > 0:
-            cart_title = str("mexicun pizza 3").title()
-            cart_sub_title = "Price " + str(mexican_pizza_3_item * 5) + "$, Quantity: " + str(
-                mexican_pizza_3_item)
-            call_back_text_place_order = "Place Order"  # intent
-            call_back_text_change_quantity = "change quantity mexicun pizza 3"
-            call_back_text_remove_from_cart = "remove from cart mexicun pizza 3 and food category pizza"
-            tacos_buttons = [
-                ['Place Order', call_back_text_place_order],
-                ['Change Quantity', call_back_text_change_quantity],
-                ['Remove From Cart', call_back_text_remove_from_cart]
-            ]
-            pizza = fb_platform.make_card_response(cart_title, cart_sub_title,
-                                                   "http://jalilurrahman.com/ChatBotImageResource/mexican_pizza_3.jpeg"
-                                                   ".jpeg",
-                                                   tacos_buttons)
-            fb_cart_order_response.append(pizza)
-
-        # ======= Bangladeshi Burger ==========
-        if bangladeshi_burger_1_item > 0:
-            cart_title = str("bangladeshi burger 1").title()
-            cart_sub_title = "Price " + str(bangladeshi_burger_1_item * 5) + "$, Quantity: " + str(
-                bangladeshi_burger_1_item)
-            call_back_text_place_order = "Place Order"  # intent
-            call_back_text_change_quantity = "change quantity bangladeshi burger 1"
-            call_back_text_remove_from_cart = "remove from cart bangladeshi burger 1 and food category burger"
-            tacos_buttons = [
-                ['Place Order', call_back_text_place_order],
-                ['Change Quantity', call_back_text_change_quantity],
-                ['Remove From Cart', call_back_text_remove_from_cart]
-            ]
-            pizza = fb_platform.make_card_response(cart_title, cart_sub_title,
-                                                   "http://jalilurrahman.com/ChatBotImageResource"
-                                                   "/bangladeshi_burger_1.jpg",
-                                                   tacos_buttons)
-            fb_cart_order_response.append(pizza)
-        if mexican_burger_1_item > 0:
-            cart_title = str("mexicun burger 1").title()
-            cart_sub_title = "Price " + str(mexican_burger_1_item * 5) + "$, Quantity: " + str(
-                mexican_burger_1_item)
-            call_back_text_place_order = "Place Order"  # intent
-            call_back_text_change_quantity = "change quantity mexicun burger 1"
-            call_back_text_remove_from_cart = "remove from cart mexicun burger 1 and food category burger"
-            tacos_buttons = [
-                ['Place Order', call_back_text_place_order],
-                ['Change Quantity', call_back_text_change_quantity],
-                ['Remove From Cart', call_back_text_remove_from_cart]
-            ]
-            pizza = fb_platform.make_card_response(cart_title, cart_sub_title,
-                                                   "http://jalilurrahman.com/ChatBotImageResource"
-                                                   "/mexican_burger_1.jpg",
-                                                   tacos_buttons)
-            fb_cart_order_response.append(pizza)
-
-        if bangladeshi_burger_2_item > 0:
-            cart_title = str("bangladeshi burger 2").title()
-            cart_sub_title = "Price " + str(bangladeshi_burger_2_item * 5) + "$, Quantity: " + str(
-                bangladeshi_burger_2_item)
-            call_back_text_place_order = "Place Order"  # intent
-            call_back_text_change_quantity = "change quantity bangladeshi burger 2"
-            call_back_text_remove_from_cart = "remove from cart bangladeshi burger 2 and food category burger"
-            tacos_buttons = [
-                ['Place Order', call_back_text_place_order],
-                ['Change Quantity', call_back_text_change_quantity],
-                ['Remove From Cart', call_back_text_remove_from_cart]
-            ]
-            pizza = fb_platform.make_card_response(cart_title, cart_sub_title,
-                                                   "http://jalilurrahman.com/ChatBotImageResource"
-                                                   "/bangladeshi_burger_2.jpeg",
-                                                   tacos_buttons)
-            fb_cart_order_response.append(pizza)
-        if mexican_burger_2_item > 0:
-            cart_title = str("mexicun burger 2").title()
-            cart_sub_title = "Price " + str(mexican_burger_2_item * 5) + "$, Quantity: " + str(
-                mexican_burger_2_item)
-            call_back_text_place_order = "Place Order"  # intent
-            call_back_text_change_quantity = "change quantity mexicun burger 2"
-            call_back_text_remove_from_cart = "remove from cart mexicun burger 2 and food category burger"
-            tacos_buttons = [
-                ['Place Order', call_back_text_place_order],
-                ['Change Quantity', call_back_text_change_quantity],
-                ['Remove From Cart', call_back_text_remove_from_cart]
-            ]
-            pizza = fb_platform.make_card_response(cart_title, cart_sub_title,
-                                                   "http://jalilurrahman.com/ChatBotImageResource"
-                                                   "/mexican_burger_2.jpeg",
-                                                   tacos_buttons)
-            fb_cart_order_response.append(pizza)
-
-        if bangladeshi_burger_3_item > 0:
-            cart_title = str("bangladeshi burger 3").title()
-            cart_sub_title = "Price " + str(bangladeshi_burger_3_item * 5) + "$, Quantity: " + str(
-                bangladeshi_burger_3_item)
-            call_back_text_place_order = "Place Order"  # intent
-            call_back_text_change_quantity = "change quantity bangladeshi burger 3"
-            call_back_text_remove_from_cart = "remove from cart bangladeshi burger 3 and food category burger"
-            tacos_buttons = [
-                ['Place Order', call_back_text_place_order],
-                ['Change Quantity', call_back_text_change_quantity],
-                ['Remove From Cart', call_back_text_remove_from_cart]
-            ]
-            pizza = fb_platform.make_card_response(cart_title, cart_sub_title,
-                                                   "http://jalilurrahman.com/ChatBotImageResource"
-                                                   "/bangladeshi_burger_3.jpeg",
-                                                   tacos_buttons)
-            fb_cart_order_response.append(pizza)
-        if mexican_burger_3_item > 0:
-            cart_title = str("mexicun burger 3").title()
-            cart_sub_title = "Price " + str(mexican_burger_3_item * 5) + "$, Quantity: " + str(
-                mexican_burger_3_item)
-            call_back_text_place_order = "Place Order"  # intent
-            call_back_text_change_quantity = "change quantity mexicun burger 3"
-            call_back_text_remove_from_cart = "remove from cart mexicun burger 3 and food category burger"
-            tacos_buttons = [
-                ['Place Order', call_back_text_place_order],
-                ['Change Quantity', call_back_text_change_quantity],
-                ['Remove From Cart', call_back_text_remove_from_cart]
-            ]
-            pizza = fb_platform.make_card_response(cart_title, cart_sub_title,
-                                                   "http://jalilurrahman.com/ChatBotImageResource"
-                                                   "/mexican_burger_3.jpeg",
-                                                   tacos_buttons)
-            fb_cart_order_response.append(pizza)
 
         print(f"{len(fb_cart_order_response)}")
         print(fb_cart_order_response)
@@ -951,14 +612,14 @@ def show_my_cart(sender_id, msg):
 
 
 # Food category order
-def process_food_order_quantity(sender_id, food_category, order_food_items, order_quantity_number):
+def process_food_order_tacos_quantity(sender_id, food_category, order_food_items, order_quantity_number):
     # here sender_id = user facebook id
     # food_category = ""  # tacos, burger, pizza
     # order_food_items = ""  # bangladeshi tacos 1,....
     # order_quantity_number = 1,2,3,4...
     user_tacos_order = []
-    if sender_id in food_order:
-        user_tacos_order = food_order[sender_id]
+    if sender_id in tacos_food_order:
+        user_tacos_order = tacos_food_order[sender_id]
 
     for row in user_tacos_order:
         if not bool(row['status']):
@@ -966,7 +627,7 @@ def process_food_order_quantity(sender_id, food_category, order_food_items, orde
             row['quantity'] = int(order_quantity_number)
             break
 
-    food_order[sender_id] = user_tacos_order
+    tacos_food_order[sender_id] = user_tacos_order
     fulfillment_text = 'process food order tacos quantity'
     ff_response = FulfillmentResponse()
     fulfillment_message = ff_response.fulfillment_text(fulfillment_text)
@@ -987,8 +648,8 @@ def process_food_order_quantity(sender_id, food_category, order_food_items, orde
 
     if DEBUG_LOG_ENABLE:
         print("==== order process ===")
-        if sender_id in food_order:
-            user_tacos_order = food_order[sender_id]
+        if sender_id in tacos_food_order:
+            user_tacos_order = tacos_food_order[sender_id]
 
         for row in user_tacos_order:
             print(row['item_name'])
@@ -1004,19 +665,15 @@ def process_food_order_quantity(sender_id, food_category, order_food_items, orde
 def process_food_order_tacos_booking(sender_id, order_food_items, food_category_type):
     # update tacos order
     user_tacos_order = []
-    if sender_id in food_order:
-        user_tacos_order = food_order[sender_id]
+    if sender_id in tacos_food_order:
+        user_tacos_order = tacos_food_order[sender_id]
 
     # remove item which are status false
     for row in user_tacos_order:
         if not bool(row['status']):
             user_tacos_order.remove(row)
-    # remove this item if previously booking
-    for row in user_tacos_order:
-        if str(row['item_name']).lower() == str(order_food_items).lower():
-            user_tacos_order.remove(row)
 
-    if order_food_items == "bangladeshi tacos 1" or order_food_items == "mexicun tacos 1":
+    if order_food_items == "bangladeshi tacos 1":
         new_tacos_order = {
             "item_name": str(order_food_items),
             "price": 5,
@@ -1024,8 +681,8 @@ def process_food_order_tacos_booking(sender_id, order_food_items, food_category_
             "status": False
         }
         user_tacos_order.append(new_tacos_order)
-        food_order[sender_id] = user_tacos_order
-    elif order_food_items == "bangladeshi tacos 2" or order_food_items == "mexicun tacos 2":
+        tacos_food_order[sender_id] = user_tacos_order
+    elif order_food_items == "bangladeshi tacos 2":
         new_tacos_order = {
             "item_name": str(order_food_items),
             "price": 7,
@@ -1033,8 +690,8 @@ def process_food_order_tacos_booking(sender_id, order_food_items, food_category_
             "status": False
         }
         user_tacos_order.append(new_tacos_order)
-        food_order[sender_id] = user_tacos_order
-    elif order_food_items == "bangladeshi tacos 3" or order_food_items == "mexicun tacos 3":
+        tacos_food_order[sender_id] = user_tacos_order
+    elif order_food_items == "bangladeshi tacos 3":
         new_tacos_order = {
             "item_name": str(order_food_items),
             "price": 10,
@@ -1042,7 +699,7 @@ def process_food_order_tacos_booking(sender_id, order_food_items, food_category_
             "status": False
         }
         user_tacos_order.append(new_tacos_order)
-        food_order[sender_id] = user_tacos_order
+        tacos_food_order[sender_id] = user_tacos_order
 
     fulfillment_text = 'Mexicun food category'
     ff_response = FulfillmentResponse()
@@ -1050,128 +707,6 @@ def process_food_order_tacos_booking(sender_id, order_food_items, food_category_
 
     fb_platform = FacebookResponse()
     title = "How many items of " + str(food_category_type).title() + " Tacos do you need?"
-    replies = ['1', '2', '3', '4', '5', '6', '7']
-    fb_quick_replies = fb_platform.quick_replies(title, replies)
-
-    ff_response = FulfillmentResponse()
-
-    quick_replies_response = ff_response.fulfillment_messages([fb_quick_replies])
-    reply = ff_response.main_response(fulfillment_message, quick_replies_response)
-    if DEBUG_LOG_ENABLE:
-        print(reply)
-    return reply
-
-
-def process_food_order_pizza_booking(sender_id, order_food_items, food_category_type):
-    # update tacos order
-    user_pizza_order = []
-    if sender_id in food_order:
-        user_pizza_order = food_order[sender_id]
-
-    # remove item which are status false
-    for row in user_pizza_order:
-        if not bool(row['status']):
-            user_pizza_order.remove(row)
-    # remove this item if previously booking
-    for row in user_pizza_order:
-        if str(row['item_name']).lower() == str(order_food_items).lower():
-            user_pizza_order.remove(row)
-
-    if order_food_items == "bangladeshi pizza 1" or order_food_items == "mexicun pizza 1":
-        new_tacos_order = {
-            "item_name": str(order_food_items),
-            "price": 5,
-            "quantity": 0,
-            "status": False
-        }
-        user_pizza_order.append(new_tacos_order)
-        food_order[sender_id] = user_pizza_order
-    elif order_food_items == "bangladeshi pizza 2" or order_food_items == "mexicun pizza 2":
-        new_tacos_order = {
-            "item_name": str(order_food_items),
-            "price": 7,
-            "quantity": 0,
-            "status": False
-        }
-        user_pizza_order.append(new_tacos_order)
-        food_order[sender_id] = user_pizza_order
-    elif order_food_items == "bangladeshi pizza 3" or order_food_items == "mexicun pizza 3":
-        new_tacos_order = {
-            "item_name": str(order_food_items),
-            "price": 10,
-            "quantity": 0,
-            "status": False
-        }
-        user_pizza_order.append(new_tacos_order)
-        food_order[sender_id] = user_pizza_order
-
-    fulfillment_text = 'bangladeshi food category'
-    ff_response = FulfillmentResponse()
-    fulfillment_message = ff_response.fulfillment_text(fulfillment_text)
-
-    fb_platform = FacebookResponse()
-    title = "How many items of " + str(food_category_type).title() + " Pizza do you need?"
-    replies = ['1', '2', '3', '4', '5', '6', '7']
-    fb_quick_replies = fb_platform.quick_replies(title, replies)
-
-    ff_response = FulfillmentResponse()
-
-    quick_replies_response = ff_response.fulfillment_messages([fb_quick_replies])
-    reply = ff_response.main_response(fulfillment_message, quick_replies_response)
-    if DEBUG_LOG_ENABLE:
-        print(reply)
-    return reply
-
-
-def process_food_order_burger_booking(sender_id, order_food_items, food_category_type):
-    # update tacos order
-    user_pizza_order = []
-    if sender_id in food_order:
-        user_pizza_order = food_order[sender_id]
-
-    # remove item which are status false
-    for row in user_pizza_order:
-        if not bool(row['status']):
-            user_pizza_order.remove(row)
-    # remove this item if previously booking
-    for row in user_pizza_order:
-        if str(row['item_name']).lower() == str(order_food_items).lower():
-            user_pizza_order.remove(row)
-
-    if order_food_items == "bangladeshi burger 1" or order_food_items == "mexicun burger 1":
-        new_tacos_order = {
-            "item_name": str(order_food_items),
-            "price": 5,
-            "quantity": 0,
-            "status": False
-        }
-        user_pizza_order.append(new_tacos_order)
-        food_order[sender_id] = user_pizza_order
-    elif order_food_items == "bangladeshi burger 2" or order_food_items == "mexicun burger 2":
-        new_tacos_order = {
-            "item_name": str(order_food_items),
-            "price": 7,
-            "quantity": 0,
-            "status": False
-        }
-        user_pizza_order.append(new_tacos_order)
-        food_order[sender_id] = user_pizza_order
-    elif order_food_items == "bangladeshi burger 3" or order_food_items == "mexicun burger 3":
-        new_tacos_order = {
-            "item_name": str(order_food_items),
-            "price": 10,
-            "quantity": 0,
-            "status": False
-        }
-        user_pizza_order.append(new_tacos_order)
-        food_order[sender_id] = user_pizza_order
-
-    fulfillment_text = 'bangladeshi food category'
-    ff_response = FulfillmentResponse()
-    fulfillment_message = ff_response.fulfillment_text(fulfillment_text)
-
-    fb_platform = FacebookResponse()
-    title = "How many items of " + str(food_category_type).title() + " Burger do you need?"
     replies = ['1', '2', '3', '4', '5', '6', '7']
     fb_quick_replies = fb_platform.quick_replies(title, replies)
 
@@ -1195,185 +730,29 @@ def process_food_order_tacos(food_category):
         ['Add to cart', call_back_text]
     ]
     title = str(food_category).title() + " Tacos1"
-    if str(food_category).lower() == "mexicun":
-        tacos1 = fb_platform.make_card_response(title, "5$",
-                                                "http://jalilurrahman.com/ChatBotImageResource/mexican_tacos_1.jpeg",
-                                                tacos_buttons)
-    else:
-        tacos1 = fb_platform.make_card_response(title, "5$",
-                                                "http://jalilurrahman.com/ChatBotImageResource/tacos1.jpeg",
-                                                tacos_buttons)
+    tacos1 = fb_platform.make_card_response(title, "5$",
+                                            "http://jalilurrahman.com/ChatBotImageResource/tacos1.jpeg",
+                                            tacos_buttons)
     call_back_text = "select " + str(food_category).lower() + " tacos 2"
     tacos_buttons = [
         ['Add to cart', call_back_text]
     ]
     title = str(food_category).title() + " Tacos2"
-    if str(food_category).lower() == "mexicun":
-        tacos2 = fb_platform.make_card_response(title, "7$",
-                                                "http://jalilurrahman.com/ChatBotImageResource/mexican_tacos_2.jpeg",
-                                                tacos_buttons)
-    else:
-        tacos2 = fb_platform.make_card_response(title, "7$",
-                                                "http://jalilurrahman.com/ChatBotImageResource/tacos2.jpeg",
-                                                tacos_buttons)
+    tacos2 = fb_platform.make_card_response(title, "7$",
+                                            "http://jalilurrahman.com/ChatBotImageResource/tacos2.jpeg",
+                                            tacos_buttons)
 
     call_back_text = "select " + str(food_category).lower() + " tacos 3"
     tacos_buttons = [
         ['Add to cart', call_back_text]
     ]
     title = str(food_category).title() + " Tacos3"
-    if str(food_category).lower() == "mexicun":
-        tacos3 = fb_platform.make_card_response(title, "10$",
-                                                "http://jalilurrahman.com/ChatBotImageResource/mexican_tacos_3.jpg",
-                                                tacos_buttons)
-    else:
-        tacos3 = fb_platform.make_card_response(title, "10$",
-                                                "http://jalilurrahman.com/ChatBotImageResource/tacos3.jpeg",
-                                                tacos_buttons)
-    tacos_response = fb_platform.card_full_fillment([tacos1, tacos2, tacos3])
-
-    reply = ff_response.main_response(fulfillment_message, tacos_response)
-    if DEBUG_LOG_ENABLE:
-        print(reply)
-    return reply
-
-
-def process_food_order_pizza(food_category):
-    fulfillment_text = 'pizza food category'
-    ff_response = FulfillmentResponse()
-    fulfillment_message = ff_response.fulfillment_text(fulfillment_text)
-
-    fb_platform = FacebookResponse()
-    call_back_text = "select " + str(food_category).lower() + " pizza 1"
-    tacos_buttons = [
-        ['Add to cart', call_back_text]
-    ]
-    title = str(food_category).title() + " Pizza1"
-    image_url = "http://jalilurrahman.com/ChatBotImageResource/bangladeshi_pizza_1.jpg"
-    if str(food_category).lower() == "mexicun":
-        image_url = "http://jalilurrahman.com/ChatBotImageResource/mexican_pizza_1.jpeg"
-    tacos1 = fb_platform.make_card_response(title, "5$",
-                                            image_url,
-                                            tacos_buttons)
-
-    call_back_text = "select " + str(food_category).lower() + " pizza 2"
-    tacos_buttons = [
-        ['Add to cart', call_back_text]
-    ]
-    title = str(food_category).title() + " Pizza2"
-    image_url = "http://jalilurrahman.com/ChatBotImageResource/bangladeshi_pizza_2.jpg"
-    if str(food_category).lower() == "mexicun":
-        image_url = "http://jalilurrahman.com/ChatBotImageResource/mexican_pizza_2.jpeg"
-    tacos2 = fb_platform.make_card_response(title, "7$",
-                                            image_url,
-                                            tacos_buttons)
-
-    call_back_text = "select " + str(food_category).lower() + " pizza 3"
-    tacos_buttons = [
-        ['Add to cart', call_back_text]
-    ]
-    title = str(food_category).title() + " Pizza3"
-    image_url = "http://jalilurrahman.com/ChatBotImageResource/bangladeshi_pizza_3.jpeg"
-    if str(food_category).lower() == "mexicun":
-        image_url = "http://jalilurrahman.com/ChatBotImageResource/mexican_pizza_3.jpeg"
     tacos3 = fb_platform.make_card_response(title, "10$",
-                                            image_url,
+                                            "http://jalilurrahman.com/ChatBotImageResource/tacos3.jpeg",
                                             tacos_buttons)
     tacos_response = fb_platform.card_full_fillment([tacos1, tacos2, tacos3])
 
     reply = ff_response.main_response(fulfillment_message, tacos_response)
-    if DEBUG_LOG_ENABLE:
-        print(reply)
-    return reply
-
-
-def process_food_order_burger(food_category):
-    fulfillment_text = 'burger food category'
-    ff_response = FulfillmentResponse()
-    fulfillment_message = ff_response.fulfillment_text(fulfillment_text)
-
-    fb_platform = FacebookResponse()
-    call_back_text = "select " + str(food_category).lower() + " burger 1"
-    tacos_buttons = [
-        ['Add to cart', call_back_text]
-    ]
-    title = str(food_category).title() + " Burger1"
-    image_url = "http://jalilurrahman.com/ChatBotImageResource/bangladeshi_burger_1.jpg"
-    if str(food_category).lower() == "mexicun":
-        image_url = "http://jalilurrahman.com/ChatBotImageResource/mexican_burger_1.jpg"
-    tacos1 = fb_platform.make_card_response(title, "5$",
-                                            image_url,
-                                            tacos_buttons)
-
-    call_back_text = "select " + str(food_category).lower() + " burger 2"
-    tacos_buttons = [
-        ['Add to cart', call_back_text]
-    ]
-    title = str(food_category).title() + " Burger2"
-    image_url = "http://jalilurrahman.com/ChatBotImageResource/bangladeshi_burger_2.jpeg"
-    if str(food_category).lower() == "mexicun":
-        image_url = "http://jalilurrahman.com/ChatBotImageResource/mexican_burger_2.jpeg"
-    tacos2 = fb_platform.make_card_response(title, "7$",
-                                            image_url,
-                                            tacos_buttons)
-
-    call_back_text = "select " + str(food_category).lower() + " burger 3"
-    tacos_buttons = [
-        ['Add to cart', call_back_text]
-    ]
-    title = str(food_category).title() + " Burger3"
-    image_url = "http://jalilurrahman.com/ChatBotImageResource/bangladeshi_burger_3.jpeg"
-    if str(food_category).lower() == "mexicun":
-        image_url = "http://jalilurrahman.com/ChatBotImageResource/mexican_burger_3.jpeg"
-    tacos3 = fb_platform.make_card_response(title, "10$",
-                                            image_url,
-                                            tacos_buttons)
-    tacos_response = fb_platform.card_full_fillment([tacos1, tacos2, tacos3])
-
-    reply = ff_response.main_response(fulfillment_message, tacos_response)
-    if DEBUG_LOG_ENABLE:
-        print(reply)
-    return reply
-
-
-def get_restaurant_direction(sender_id, data):
-    fulfillment_text = 'get restaurant direction '
-    ff_response = FulfillmentResponse()
-    fulfillment_message = ff_response.fulfillment_text(fulfillment_text)
-
-    # fb_platform = FacebookResponse()
-    # text = fb_platform.text_response("need to open website")
-    # ff_response = FulfillmentResponse()
-    map_url = "https://www.google.com/maps/place/Culvert+Road,+Dhaka/@23.7327172,90.4103675," \
-              "17z/data=!3m1!4b1!4m5!3m4!1s0x3755b858abb44a8f:0x9161c1493b7fa5ea!8m2!3d23.7327123!4d90.4125562"
-    msg = "Our Restaurant location is Dhaka, Palton, Culvert Road"
-    quick_replies_response = {
-        "fulfillment_messages": [
-            {
-                "payload": {
-                    "facebook": {
-                        "attachment": {
-                            "type": "template",
-                            "payload": {
-                                "template_type": "button",
-                                "text": str(msg),
-                                "buttons": [
-                                    {
-                                        "type": "web_url",
-                                        "url": map_url,
-                                        "title": "View On Map",
-                                        "webview_height_ratio": "tall"
-                                    }
-                                ]
-                            }
-                        }
-                    }
-                }
-            }
-        ]
-    }
-
-    reply = ff_response.main_response(fulfillment_message, quick_replies_response)
     if DEBUG_LOG_ENABLE:
         print(reply)
     return reply
@@ -2071,8 +1450,8 @@ def rest_api_confirm_user_order():
     if str(sender_id) in user_info_dic:
         user_info_dic.pop(str(sender_id))
         print(f"==user_info_dic == remove for {sender_id}")
-    if str(sender_id) in food_order:
-        food_order.pop(str(sender_id))
+    if str(sender_id) in tacos_food_order:
+        tacos_food_order.pop(str(sender_id))
         print(f"==tacos_food_order == remove for {sender_id}")
     if str(sender_id) in user_delivery_type:
         user_delivery_type.pop(str(sender_id))
@@ -2085,7 +1464,7 @@ def rest_api_confirm_user_order():
     print("==user_info_dic==")
     print(user_info_dic)
     print("==tacos_food_order==")
-    print(food_order)
+    print(tacos_food_order)
     print("==user_delivery_type==")
     print(user_delivery_type)
     print("==user_orders==")
@@ -2143,12 +1522,12 @@ def rest_api_get_user_order(sender_id):
 
     print(f"==api call start == {sender_id}")
     result = []
-    print(food_order)
+    print(tacos_food_order)
     # Tacos food order
     # send2 = str()
     my_tacos_order = []
-    if str(sender_id) in food_order:
-        my_tacos_order = food_order[str(sender_id)]
+    if str(sender_id) in tacos_food_order:
+        my_tacos_order = tacos_food_order[str(sender_id)]
 
     print("==my_tacos_order==")
     print(my_tacos_order)
